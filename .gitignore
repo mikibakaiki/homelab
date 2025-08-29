@@ -1,0 +1,163 @@
+# =============================================================================
+# HOMELAB GITIGNORE - COMPREHENSIVE SECURITY & CLEANUP
+# =============================================================================
+
+# =============================================================================
+# SENSITIVE CREDENTIALS & SECRETS
+# =============================================================================
+
+# Environment files with secrets
+.env
+.env.local
+.env.production
+.env.staging
+.env.development
+*.env
+!*.env.example
+
+# API Keys & Tokens
+**/cf-token
+**/cloudflare-token
+**/api-token
+**/api-key
+**/*token*
+**/*secret*
+**/*credential*
+
+# Certificates & Private Keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+**/*private*
+**/tls.*
+**/ssl.*
+
+# Authentication Files
+**/htpasswd
+**/auth
+**/basic-auth
+**/.htpasswd
+
+# =============================================================================
+# DOCKER & CONTAINERIZATION
+# =============================================================================
+
+# Docker volumes and data
+**/data/
+**/volumes/
+**/docker-data/
+
+# Container logs
+**/*container*.log
+**/docker-compose.override.yml
+
+# Build artifacts
+**/Dockerfile.*
+!**/Dockerfile.example
+
+# =============================================================================
+# APPLICATION-SPECIFIC DATA
+# =============================================================================
+
+# Pi-hole Data (ignore all Pi-hole runtime data - config is in docker-compose)
+**/pihole/
+docker/pihole/
+
+# Traefik Data (keep only example configs, ignore runtime data)
+**/traefik/config.yaml
+!**/traefik/*.example.yaml
+**/traefik/traefik.yaml
+**/traefik/acme.json
+**/traefik/logs/
+**/traefik/data/
+
+# Portainer Data
+**/portainer_data/
+**/portainer/
+
+# Database files
+*.db
+*.db-*
+*.sqlite*
+*.sql
+
+# =============================================================================
+# LOGS & TEMPORARY FILES
+# =============================================================================
+
+# All log files
+*.log
+**/logs/
+**/log/
+**/*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+**/tmp/
+**/temp/
+
+# Backup files
+*.bak
+*.backup
+*.old
+**/backups/
+**/backup/
+**/*.tar.gz
+**/*.zip
+
+# =============================================================================
+# SYSTEM & OS FILES
+# =============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# DEVELOPMENT & EDITOR FILES
+# =============================================================================
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Version control
+.git/
+.svn/
+.hg/
+
+# Node.js (if using)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =============================================================================
+# CUSTOM ADDITIONS
+# =============================================================================
+
+# Add any project-specific files here
