@@ -70,6 +70,7 @@ docker/pihole/
 # Traefik Data (keep only example configs, ignore runtime data)
 **/traefik/config.yaml
 !**/traefik/*.example.yaml
+!**/traefik/*cf-token.example
 **/traefik/traefik.yaml
 **/traefik/acme.json
 **/traefik/logs/
