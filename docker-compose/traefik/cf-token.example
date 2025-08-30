@@ -1,0 +1,10 @@
+# =============================================================================
+# CLOUDFLARE API TOKEN - EXAMPLE FILE
+# =============================================================================
+# Copy this file to cf-token and add your actual Cloudflare API token
+# NEVER commit the cf-token file to version control!
+
+# Get your API token from: https://dash.cloudflare.com/profile/api-tokens
+# Required permissions: Zone:Read, DNS:Edit for your domain
+
+your_cloudflare_api_token_here

@@ -1,0 +1,103 @@
+# Pi-hole v6 with bridge networking and DHCP helper for LAN DHCP functionality
+# This configuration uses a DHCP relay to enable Pi-hole DHCP on bridge networks
+services:
+  cloudflared:
+    container_name: cloudflared
+    restart: unless-stopped
+    image: cloudflare/cloudflared:latest
+    command: proxy-dns
+    networks:
+      - backend
+    environment:
+      - "TUNNEL_DNS_UPSTREAM=https://1.1.1.1/dns-query,https://1.0.0.1/dns-query,https://9.9.9.9/dns-query,https://149.112.112.9/dns-query"
+      - "TUNNEL_DNS_PORT=5053"
+      - "TUNNEL_DNS_ADDRESS=0.0.0.0"  # Listen on all interfaces for Pi-hole to reach
+    security_opt:
+      - no-new-privileges:true
+  pihole:
+    container_name: pihole
+    hostname: pihole-server
+    image: pihole/pihole:latest
+    networks:
+      backend:
+        ipv4_address: 172.31.0.100
+      proxy:
+    environment:
+      TZ: ${TZ}
+      FTLCONF_webserver_api_password: ${PIHOLE_PASSWORD}
+      FTLCONF_webserver_port: '8080'
+      FTLCONF_webserver_interface_theme: "high-contrast-dark"
+      # DNS Configuration - point to Cloudflared on container name
+      FTLCONF_dns_upstreams: 'cloudflared#5053'
+      # TODO: i think this dhcp_dns does nothing.
+      # Set Pi-hole as the DNS server for DHCP clients
+      FTLCONF_dhcp_dns: '192.168.1.5'
+      FTLCONF_dns_listeningMode: 'all'
+      FTLCONF_dns_dnssec: 'true'
+      FTLCONF_dns_bogus_priv: 'true'
+      FTLCONF_dns_fqdn_required: 'true'
+      FTLCONF_dns_ignoreLocalhost: 'true'
+      FTLCONF_dns_interface: 'eth0'
+      FTLCONF_dns_hosts: '192.168.1.5 apps.${DOMAIN_NAME}'
+      FTLCONF_dns_cnameRecords: "traefik.${DOMAIN_NAME},apps.${DOMAIN_NAME};pihole.${DOMAIN_NAME},apps.${DOMAIN_NAME};portainer.${DOMAIN_NAME},apps.${DOMAIN_NAME}"
+      FTLCONF_dhcp_active: 'true'
+      FTLCONF_dhcp_start: '192.168.1.100'
+      FTLCONF_dhcp_end: '192.168.1.200'
+      FTLCONF_dhcp_router: '192.168.1.254'
+      FTLCONF_dhcp_netmask: '255.255.255.0'
+      FTLCONF_dhcp_leasetime: '24h'
+      FTLCONF_dhcp_rapidCommit: 'true'
+      # Force DHCP clients to use host IP as DNS server
+      # TODO: i think this is redundant
+      FTLCONF_misc_dnsmasq_lines: 'dhcp-option=6,192.168.1.5'
+    volumes:
+      - '/home/miki/homelab/docker/pihole/pihole:/etc/pihole/'
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
+    depends_on:
+      - cloudflared
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8080:8080/tcp"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.pihole.entrypoints=http"
+      - "traefik.http.routers.pihole.rule=Host(`pihole.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.pihole.middlewares=pihole-https-redirect"
+      - "traefik.http.middlewares.pihole-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.pihole-secure.entrypoints=https"
+      - "traefik.http.routers.pihole-secure.rule=Host(`pihole.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.pihole-secure.tls=true"
+      - "traefik.http.routers.pihole-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.pihole-secure.service=pihole"
+      - "traefik.http.services.pihole.loadbalancer.server.port=8080"
+
+  dhcp-helper:
+    container_name: dhcp-helper
+    image: homeall/dhcphelper:latest
+    restart: unless-stopped
+    network_mode: "host"
+    environment:
+      - IP=172.31.0.100
+      - TZ=${TZ}
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      - pihole
+
+networks:
+  backend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+  proxy:
+    external: true
+    
+    # # Optional: Add authentication middleware
+    # # - "traefik.http.routers.pihole-secure.middlewares=auth"
+    # # - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_CREDENTIALS}"
+    

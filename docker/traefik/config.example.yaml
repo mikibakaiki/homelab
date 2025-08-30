@@ -1,0 +1,52 @@
+http:
+  middlewares:    
+    default-security-headers:
+      headers:
+        customBrowserXSSValue: 0                            # X-XSS-Protection=1; mode=block
+        contentTypeNosniff: true                          # X-Content-Type-Options=nosniff
+        forceSTSHeader: true                              # Add the Strict-Transport-Security header even when the connection is HTTP
+        frameDeny: false                                   # X-Frame-Options=deny
+        referrerPolicy: "strict-origin-when-cross-origin"
+        stsIncludeSubdomains: true                        # Add includeSubdomains to the Strict-Transport-Security header
+        stsPreload: true                                  # Add preload flag appended to the Strict-Transport-Security header
+        stsSeconds: 3153600                              # Set the max-age of the Strict-Transport-Security header (63072000 = 2 years)
+        contentSecurityPolicy: "default-src 'self'"     
+        customRequestHeaders:
+          X-Forwarded-Proto: https
+    https-redirectscheme:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+  routers:
+    portainer:
+      entryPoints:
+        - "https"
+      rule: "Host(`portainer.example.com`)"
+      middlewares:
+        - default-security-headers
+        - https-redirectscheme
+      tls: {}
+      service: portainer
+    pihole:
+      entryPoints:
+        - "https"
+      rule: "Host(`pihole.example.com`)"
+      middlewares:
+        - default-security-headers
+      tls:
+        certResolver: cloudflare
+      service: pihole
+
+  services:
+    portainer:
+      loadBalancer:
+        servers:
+          - url: "https://192.168.1.100:9443"  # Replace with your server IP
+        passHostHeader: true
+
+    pihole:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.1.100:8080"  # Replace with your Pi-hole server IP and port
+        passHostHeader: true
