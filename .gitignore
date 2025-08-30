@@ -64,8 +64,7 @@
 # =============================================================================
 
 # Pi-hole Data (ignore all Pi-hole runtime data - config is in docker-compose)
-**/pihole/
-docker/pihole/
+**/docker/pihole/
 
 # Traefik Data (keep only example configs, ignore runtime data)
 **/traefik/config.yaml
