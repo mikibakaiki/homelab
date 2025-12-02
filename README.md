@@ -78,7 +78,16 @@ graph TD
    nano docker-compose/pihole/.env
    ```
 
-3. **Start services**:
+3. **Create Docker networks**:
+   ```bash
+   # Create the external proxy network (required for Traefik ↔ Pi-hole communication)
+   docker network create proxy
+   
+   # Verify network creation
+   docker network ls | grep proxy
+   ```
+
+4. **Start services**:
    ```bash
    # Start Traefik first
    cd docker-compose/traefik
@@ -89,10 +98,13 @@ graph TD
    docker compose up -d
    ```
 
-4. **Verify setup**:
+5. **Verify setup**:
    ```bash
    # Check all services
    docker ps
+   
+   # Verify network connectivity
+   docker network inspect proxy
    
    # Test DNS resolution
    nslookup google.com <your-pihole-ip>
@@ -149,6 +161,24 @@ homelab/
 - **Regular image updates** for security patches
 
 ## 🛠️ Configuration Details
+
+### Docker Networks
+
+This homelab uses **two separate Docker networks** for security and functionality:
+
+#### 1. **Proxy Network** (External)
+- **Purpose**: Enables Traefik to route HTTPS traffic to services
+- **Type**: Bridge network (created manually)
+- **Creation**: `docker network create proxy`
+- **Connected Services**: Traefik, Pi-hole, Portainer
+- **Required**: Must be created before starting any services
+
+#### 2. **Backend Network** (Internal)
+- **Purpose**: Internal communication between Pi-hole and Cloudflared
+- **Type**: Bridge network (created automatically by compose)
+- **Subnet**: `172.31.0.0/24`
+- **Connected Services**: Pi-hole, Cloudflared
+- **Pi-hole Static IP**: `172.31.0.100`
 
 ### Environment Variables
 
@@ -218,7 +248,20 @@ Critical directories to backup:
 
 ### Common Issues
 
-**DNS Resolution Problems**:
+#### "network proxy not found" Error:
+```bash
+# The proxy network must be created before starting services
+docker network create proxy
+
+# Restart services after creating network
+cd ~/homelab/docker-compose/traefik
+docker compose down && docker compose up -d
+
+cd ~/homelab/docker-compose/pihole
+docker compose down && docker compose up -d
+```
+
+#### DNS Resolution Problems:
 ```bash
 # Check Pi-hole status
 docker exec pihole pihole status
@@ -230,7 +273,7 @@ docker exec pihole nslookup google.com 127.0.0.1
 docker logs cloudflared
 ```
 
-**HTTPS Certificate Issues**:
+#### HTTPS Certificate Issues:
 ```bash
 # Check Traefik logs
 docker logs traefik
@@ -240,7 +283,7 @@ curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
      -H "Authorization: Bearer $(cat docker-compose/traefik/cf-token)"
 ```
 
-**Service Access Problems**:
+#### Service Access Problems:
 ```bash
 # Test direct container access
 curl -I http://localhost:8080/admin/  # Pi-hole
@@ -251,11 +294,47 @@ docker network ls
 docker network inspect proxy
 ```
 
+#### Containers Can't Communicate:
+```bash
+# Verify both networks exist
+docker network ls
+
+# Check proxy network has correct containers
+docker network inspect proxy
+
+# Check Pi-hole is on both networks
+docker inspect pihole --format '{{json .NetworkSettings.Networks}}' | jq
+
+# Should show both 'pihole_backend' and 'proxy'
+```
+
+### Traefik Can't Reach Pi-hole
+
+```bash
+# Ensure both are on proxy network
+docker network inspect proxy
+
+# Check Traefik logs
+docker logs traefik | grep pihole
+
+# Restart both services
+cd ~/homelab/docker-compose/traefik
+docker compose restart
+
+cd ~/homelab/docker-compose/pihole
+docker compose restart
+```
+
+
 ## 🚧 Development & Customization
 
 ### Adding New Services
 1. Create service directory in `docker-compose/`
-2. Add service to `proxy` network for Traefik routing
+2. Add service to `proxy` network for Traefik routing:
+   ```yaml
+   networks:
+     - proxy
+   ```
 3. Configure Traefik labels for HTTPS access
 4. Update documentation
 
@@ -264,6 +343,18 @@ docker network inspect proxy
 2. Recreate containers: `docker compose up -d`
 3. Test changes thoroughly
 4. Update documentation
+
+### Understanding Network Requirements
+
+**When to use the `proxy` network:**
+- Any service that needs HTTPS access via Traefik
+- Services with web interfaces (Pi-hole, Portainer, etc.)
+- Must be explicitly added to the `proxy` network in docker-compose.yaml
+
+**When to use internal networks:**
+- Service-to-service communication (Pi-hole ↔ Cloudflared)
+- Backend databases or caches
+- Services that shouldn't be externally accessible
 
 ## 📚 Documentation
 
