@@ -33,24 +33,24 @@ services:
       FTLCONF_dns_upstreams: 'cloudflared#5053'
       # TODO: i think this dhcp_dns does nothing.
       # Set Pi-hole as the DNS server for DHCP clients
-      FTLCONF_dhcp_dns: '<PIHOLE_HOST_IP>'
+      FTLCONF_dhcp_dns: '${PIHOLE_HOST_IP}'
       FTLCONF_dns_listeningMode: 'all'
       FTLCONF_dns_dnssec: 'true'
       FTLCONF_dns_bogusPriv: 'true'
       FTLCONF_dns_ignoreLocalhost: 'true'
       FTLCONF_dns_interface: 'eth0'
-      FTLCONF_dns_hosts: '<PIHOLE_HOST_IP> apps.${DOMAIN_NAME}'
+      FTLCONF_dns_hosts: '${PIHOLE_HOST_IP} apps.${DOMAIN_NAME}'
       FTLCONF_dns_cnameRecords: "sure.${DOMAIN_NAME},apps.${DOMAIN_NAME};traefik.${DOMAIN_NAME},apps.${DOMAIN_NAME};pihole.${DOMAIN_NAME},apps.${DOMAIN_NAME};portainer.${DOMAIN_NAME},apps.${DOMAIN_NAME};karakeep.${DOMAIN_NAME},apps.${DOMAIN_NAME};auth.${DOMAIN_NAME},apps.${DOMAIN_NAME}"
       FTLCONF_dhcp_active: 'true'
-      FTLCONF_dhcp_start: '<DHCP_RANGE_START>'
-      FTLCONF_dhcp_end: '<DHCP_RANGE_END>'
-      FTLCONF_dhcp_router: '<ROUTER_IP>'
+      FTLCONF_dhcp_start: '${DHCP_START}'
+      FTLCONF_dhcp_end: '${DHCP_END}'
+      FTLCONF_dhcp_router: '${ROUTER_IP}'
       FTLCONF_dhcp_netmask: '255.255.255.0'
       FTLCONF_dhcp_leasetime: '24h'
       FTLCONF_dhcp_rapidCommit: 'true'
       # Force DHCP clients to use host IP as DNS server
       # TODO: i think this is redundant
-      FTLCONF_misc_dnsmasq_lines: 'dhcp-option=6,<PIHOLE_HOST_IP>'
+      FTLCONF_misc_dnsmasq_lines: 'dhcp-option=6,${PIHOLE_HOST_IP}'
     volumes:
       - '../../docker/pihole/pihole:/etc/pihole/'
     cap_add:

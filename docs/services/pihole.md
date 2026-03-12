@@ -140,7 +140,7 @@ tar -czf pihole-backup-$(date +%Y%m%d).tar.gz ~/homelab/docker/pihole/
 
 ## Troubleshooting
 
-### DHCP: Device gets 169.254.x.x (APIPA) instead of 192.168.1.x
+### DHCP: Device gets 169.254.x.x (APIPA) instead of <LAN_IP>
 
 A `169.254.x.x` address means the device sent DHCP broadcasts but received no response. The DHCP relay path is:
 
@@ -149,7 +149,7 @@ device (WiFi/LAN)
   → DHCP broadcast (UDP port 67) → eth0 (<PIHOLE_HOST_IP>)
     → dhcp-helper (host network) sets giaddr=<PIHOLE_HOST_IP>
       → unicast to Pi-hole at 172.31.0.100:67
-        → Pi-hole responds with lease from <DHCP_RANGE_START>–200
+        → Pi-hole responds with lease from <DHCP_RANGE_START>–<DHCP_RANGE_END>
           → dhcp-helper broadcasts response back to device
 ```
 
@@ -206,7 +206,7 @@ Why it happens: Pi-hole's container eth0 is on the `pihole_backend` network (172
 
 ### DNS: Devices not using Pi-hole as DNS
 
-If a device has a valid 192.168.1.x lease but DNS isn't going through Pi-hole, check:
+If a device has a valid <LAN_IP> lease but DNS isn't going through Pi-hole, check:
 
 1. **Pi-hole pushes its own IP as DNS option 6** via `FTLCONF_misc_dnsmasq_lines: 'dhcp-option=6,<PIHOLE_HOST_IP>'`. Verify it's in the active dnsmasq config:
    ```bash

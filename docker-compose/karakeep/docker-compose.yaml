@@ -24,7 +24,7 @@ services:
       MEILI_NO_ANALYTICS: "true"
 
     extra_hosts:
-      - "auth.${DOMAIN_NAME}:<PIHOLE_HOST_IP>"
+      - "auth.${DOMAIN_NAME}:${PIHOLE_HOST_IP}"
 
     depends_on:
       meilisearch:

@@ -126,7 +126,7 @@ Docker itself handles restart policies (`unless-stopped`) for subsequent reboots
 
 - Pi-hole v6 uses `FTLCONF_*` environment variables instead of config files.
 - Upstream DNS: Cloudflared on port 5053 (`cloudflared#5053`).
-- DHCP active: range `<DHCP_RANGE_START>–200`, gateway `<ROUTER_IP>`.
+- DHCP active: range `<DHCP_RANGE_START>–<DHCP_RANGE_END>`, gateway `<ROUTER_IP>`.
 - Pi-hole host IP on LAN: `<PIHOLE_HOST_IP>`.
 - DHCP on bridge networks requires the `dhcp-helper` sidecar (host network mode) to relay broadcasts.
 - Pi-hole serves CNAME records for all service domains pointing to `apps.YOUR_DOMAIN` → `<PIHOLE_HOST_IP>`.

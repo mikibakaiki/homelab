@@ -151,11 +151,11 @@ http:
     portainer:
       loadBalancer:
         servers:
-          - url: "https://<DHCP_RANGE_START>:9443"  # replace with your host IP
+          - url: "https://<PIHOLE_HOST_IP>:9443"  # replace with your host IP
         passHostHeader: true
 
     pihole:
       loadBalancer:
         servers:
-          - url: "http://<DHCP_RANGE_START>:8080"   # replace with your host IP
+          - url: "http://<PIHOLE_HOST_IP>:8080"   # replace with your host IP
         passHostHeader: true

@@ -29,5 +29,18 @@
       "Bash(rm -rf *)",
       "Bash(sudo rm *)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE '^git commit'; then DIFF=$(git diff --cached 2>/dev/null); if echo \"$DIFF\" | grep -qE '(/home/[a-z_][a-z0-9_]+/|192\\.168\\.|10\\.[0-9]+\\.[0-9]+\\.|[a-zA-Z0-9_-]+\\.[a-zA-Z]{2,}\\.[a-zA-Z]{2,}|[A-Za-z0-9+/]{40,})'; then echo 'WARNING: staged diff may contain absolute paths, IPs, domains, or tokens — run /privacy-audit before committing' >&2; fi; fi; exit 0"
+          }
+        ]
+      }
+    ]
   }
 }

@@ -19,29 +19,6 @@ Every infrastructure change requires a change plan in `plans/` before deployment
 
 A Docker-based homelab on Raspberry Pi 4 running Pi-hole (DNS/DHCP + ad blocking), Traefik (reverse proxy + SSL), Portainer (container management), and Cloudflared (DNS-over-HTTPS). The domain is managed via Cloudflare with Let's Encrypt wildcard certificates using DNS challenge.
 
-## Common Commands
-
-```bash
-# Start a service (run from its directory)
-cd docker-compose/traefik && docker compose up -d
-cd docker-compose/pihole && docker compose up -d
-cd docker-compose/portainer && docker compose up -d
-
-# Check status / logs
-docker compose ps
-docker logs traefik --tail 50
-docker logs pihole --tail 50
-
-# Restart a service
-docker compose restart
-
-# Update Pi-hole blocklists
-docker exec pihole pihole -g
-
-# Generate Traefik dashboard password (requires apache2-utils)
-htpasswd -nbB admin yourpassword
-```
-
 ## Network Architecture
 
 Two Docker networks must exist before starting services:
@@ -55,23 +32,11 @@ Two Docker networks must exist before starting services:
 
 Pi-hole is the only service on **both** networks (it needs DNS port exposure and Traefik routing).
 
-## Directory Structure
-
-```
-docker-compose/<service>/   # Docker Compose files, .env files, secrets
-docker/<service>/           # Persistent data volumes (mounted into containers)
-docker/traefik/traefik.yaml # Traefik static config (entrypoints, providers, ACME)
-docker/traefik/config.yaml  # Traefik dynamic config (middlewares, routers, services)
-```
-
 The `docker/` directory holds live runtime data (databases, certs, logs) and is **not** fully committed — it contains gitignored sensitive files.
 
 ## Adding a New Service
 
-1. Create `docker-compose/<service>/docker-compose.yaml` and `.env` (copy from an existing service as template).
-2. Connect to the `proxy` network (mark it `external: true`).
-3. Add Traefik labels for HTTP→HTTPS redirect and HTTPS router with `tls.certresolver=cloudflare`.
-4. If the service needs a custom security header middleware, add it to `docker/traefik/config.yaml` (see existing `portainer-security-headers` pattern — Portainer and CSP-sensitive services need a relaxed CSP).
+Use `/deploy-service` skill — it runs a 7-step Infrastructure Safety Mode gate (plan → compose → network → labels → secrets → deploy → verify).
 
 ## Secrets and Environment Files
 
@@ -92,3 +57,24 @@ Pi-hole additionally uses an `addprefix` middleware to prepend `/admin` to reque
 ## Pi-hole DNS Config
 
 Pi-hole v6 uses `FTLCONF_*` environment variables (not a config file). DNS upstream is Cloudflared on port 5053 (`cloudflared#5053`). DHCP is active for `<DHCP_RANGE_START>-<DHCP_RANGE_END>`, router at `<ROUTER_IP>`, Pi-hole host IP `<PIHOLE_HOST_IP>`. A `dhcp-helper` container running in host network mode relays DHCP broadcasts to Pi-hole on the bridge network.
+
+## Critical Operational Gotchas
+
+- **Traefik restart required after config.yaml edits**: Docker bind mount caches inode. Run `cd docker-compose/traefik && docker compose restart traefik` after any `docker/traefik/config.yaml` change.
+- **Authelia config files are root-owned**: Cannot edit with Write/Edit tools. Write to `/tmp` → `docker cp` into container.
+- **Docker containers cannot resolve Pi-hole local CNAMEs**: Docker's internal DNS (127.0.0.11) bypasses Pi-hole. Fix with `extra_hosts` in compose.
+- **Portainer/Pi-hole routing uses file provider**: Traefik middleware for these services is in `docker/traefik/config.yaml`, NOT compose labels.
+
+## Useful Commands
+
+```bash
+# Update Pi-hole blocklists
+docker exec pihole pihole -g
+
+# Generate Traefik dashboard password
+htpasswd -nbB admin yourpassword
+```
+
+## When Compacting
+
+Run `/update-docs` skill to sync documentation after any multi-service change.
