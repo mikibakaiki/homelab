@@ -64,24 +64,7 @@ services:
       - "8080:8080/tcp"
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
-      - "traefik.enable=true"
-      - "traefik.docker.network=proxy"
-      # HTTP Router (redirects to HTTPS)
-      - "traefik.http.routers.pihole.entrypoints=http"
-      - "traefik.http.routers.pihole.rule=Host(`pihole.${DOMAIN_NAME}`)"
-      - "traefik.http.routers.pihole.middlewares=pihole-https-redirect"
-      - "traefik.http.middlewares.pihole-https-redirect.redirectscheme.scheme=https"
-      # HTTPS Router
-      - "traefik.http.routers.pihole-secure.entrypoints=https"
-      - "traefik.http.routers.pihole-secure.rule=Host(`pihole.${DOMAIN_NAME}`)"
-      - "traefik.http.routers.pihole-secure.tls=true"
-      - "traefik.http.routers.pihole-secure.tls.certresolver=cloudflare"
-      - "traefik.http.routers.pihole-secure.service=pihole"
-      - "traefik.http.routers.pihole-secure.middlewares=pihole-addprefix,authelia@file"
-      # Middleware to add /admin prefix
-      - "traefik.http.middlewares.pihole-addprefix.addprefix.prefix=/admin"
-      # Service configuration
-      - "traefik.http.services.pihole.loadbalancer.server.port=8080"
+      - "traefik.enable=false"  # Routing handled entirely by file provider in docker/traefik/config.yaml
 
   dhcp-helper:
     container_name: dhcp-helper
