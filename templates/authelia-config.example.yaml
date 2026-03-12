@@ -1,0 +1,186 @@
+# ===========================================================================
+# Authelia Configuration Template
+# ===========================================================================
+#
+# Live file: ~/homelab/docker/authelia/config/configuration.yml
+#   (gitignored — contains secrets, real domain, OIDC private key)
+# Template:  ~/homelab/templates/authelia-config.example.yaml (this file)
+#
+# The live file is owned by root (created by Docker bind mount).
+# To edit it, write a copy to /tmp then docker cp into the container:
+#
+#   cp ~/homelab/docker/authelia/config/configuration.yml /tmp/configuration.yml
+#   # edit /tmp/configuration.yml
+#   docker cp /tmp/configuration.yml authelia:/config/configuration.yml
+#   cd ~/homelab/docker-compose/authelia && docker compose restart authelia
+#
+# Most configuration changes require a restart. Hot-reload only applies to
+# users_database.yml (user store) — not to configuration.yml.
+#
+# ===========================================================================
+
+server:
+  address: 'tcp://:9091'
+
+log:
+  level: 'info'
+
+totp:
+  issuer: 'YOUR_DOMAIN'
+  period: 30
+  skew: 1
+
+authentication_backend:
+  file:
+    path: '/config/users_database.yml'
+    password:
+      algorithm: argon2id
+      argon2:
+        iterations: 3
+        memory: 65536
+        parallelism: 4
+        key_length: 32
+        salt_length: 16
+
+session:
+  cookies:
+    - name: 'authelia_session'
+      domain: 'YOUR_DOMAIN'          # root domain — cookie applies to all subdomains
+      authelia_url: 'https://auth.YOUR_DOMAIN'
+      expiration: '12 hours'
+      inactivity: '45 minutes'
+
+storage:
+  local:
+    path: '/data/db.sqlite3'
+
+notifier:
+  # Filesystem notifier: writes password reset links to a file.
+  # Read them with: docker exec authelia cat /data/notification.txt
+  # Replace with an smtp: block when email is available.
+  filesystem:
+    filename: '/data/notification.txt'
+
+# ---------------------------------------------------------------------------
+# Access Control
+# ---------------------------------------------------------------------------
+#
+# Rules are evaluated TOP TO BOTTOM. First match wins.
+# Place specific bypass rules BEFORE the catch-all one_factor rule.
+#
+# default_policy: deny — anything not matched by a rule is blocked.
+# This is intentional. New services are inaccessible until a rule is added.
+#
+# BYPASS RULE GUIDELINES
+# Two categories of requests cannot carry session cookies and must bypass:
+#
+# 1. OIDC / OAuth2 callback URLs
+#    After Authelia authenticates the user, it redirects back to the app's
+#    callback URL. This redirect arrives as a fresh browser navigation — no
+#    Authelia session cookie is attached. If not bypassed, Authelia intercepts
+#    the callback and redirects back to login in a loop.
+#    Pattern: '^/api/auth/.*$', '^/callback.*$' etc. (depends on the framework)
+#
+# 2. Static assets fetched without credentials
+#    Browsers fetch certain resources with credentials: omit — meaning no
+#    cookies are sent regardless of login state:
+#      - Web app manifests (<link rel="manifest" href="...">)
+#      - Some framework static bundles
+#    When Authelia intercepts these, it returns its own HTML login page.
+#    The browser receives text/html where it expected text/css or
+#    application/manifest+json, causing MIME type errors and broken styling.
+#    Pattern: '^/manifest\.json$', '^/img/favicons/.*$', '^/_next/static/.*$'
+#
+# DIAGNOSING MISSING BYPASS RULES
+#   Check Authelia logs for the failing path:
+#     docker logs authelia --tail 100 | grep "not authorized"
+#   If the path is correct but user is <anonymous>: add a bypass rule (case 2).
+#   If the path shows a doubled prefix (e.g. /admin/admin/...): the issue is
+#   a Traefik router conflict, not an Authelia bypass — see pihole router in
+#   docker/traefik/config.yaml and docs/services/pihole.md.
+#
+access_control:
+  default_policy: 'deny'
+  rules:
+
+    # Authelia portal itself must bypass — otherwise it would challenge itself.
+    - domain: 'auth.YOUR_DOMAIN'
+      policy: 'bypass'
+
+    # Pi-hole: /admin/img/* is fetched by the browser without credentials.
+    # (Web app manifest and favicons use credentials:omit per browser spec.)
+    # Without this bypass, Authelia returns its HTML login page for these
+    # fetches, and the browser reports a CSP violation or MIME type error.
+    #
+    # Note: Pi-hole's admin page is at /admin/. Sub-resource URLs already
+    # contain /admin in their path. Do NOT add an addprefix middleware to the
+    # Traefik router for pihole, or paths will be doubled (/admin/admin/...).
+    - domain: 'pihole.YOUR_DOMAIN'
+      resources:
+        - '^/admin/img/.*$'        # favicons and manifest fetched without cookies
+        - '^/admin/favicon\.ico$'
+        - '^/admin/manifest\.json$'
+      policy: 'bypass'
+
+    # Karakeep (Next.js): NextAuth OIDC callback + public assets.
+    # /api/auth/* — NextAuth callback URL; arrives without session cookie
+    #               (it IS the authentication response, not a protected resource)
+    # /manifest.json — PWA manifest, fetched with credentials:omit
+    # /_next/static/* — Next.js static assets; loaded before auth is established
+    - domain: 'karakeep.YOUR_DOMAIN'
+      resources:
+        - '^/api/auth/.*$'
+        - '^/manifest\.json$'
+        - '^/favicon\.ico$'
+        - '^/_next/static/.*$'
+      policy: 'bypass'
+
+    # Catch-all: all remaining requests to these domains require one-factor auth.
+    # Add new protected services here (or add specific bypass rules above first).
+    - domain:
+        - 'portainer.YOUR_DOMAIN'
+        - 'pihole.YOUR_DOMAIN'
+        - 'karakeep.YOUR_DOMAIN'
+        # - 'newservice.YOUR_DOMAIN'   # add new services here
+      policy: 'one_factor'
+
+# ---------------------------------------------------------------------------
+# OIDC Identity Provider
+# ---------------------------------------------------------------------------
+#
+# Authelia acts as an OIDC provider for apps that support OAuth2/OIDC login.
+# Prefer OIDC over forward-auth where available — it eliminates the second
+# app-level login prompt (user logs in once via Authelia; the app gets an
+# id_token and establishes its own session).
+#
+# Discovery endpoint: https://auth.YOUR_DOMAIN/.well-known/openid-configuration
+#
+# To add a new OIDC client:
+#   1. Generate a client secret: openssl rand -base64 32 | tr -d '\n'
+#   2. Hash it: docker run --rm ghcr.io/authelia/authelia:4.38 \
+#        authelia crypto hash generate argon2 --password 'thesecret'
+#   3. Add the client block below
+#   4. Add bypass rules above for the callback URL (^/api/auth/.*$ or equivalent)
+#   5. Restart Authelia
+#
+identity_providers:
+  oidc:
+    hmac_secret: 'YOUR_HMAC_SECRET'   # openssl rand -base64 64 | tr -d '\n'
+    jwks:
+      - key: |
+          -----BEGIN PRIVATE KEY-----
+          # Generate with: openssl genrsa 4096 | openssl pkcs8 -topk8 -nocrypt
+          -----END PRIVATE KEY-----
+    clients:
+      - client_id: 'myapp'
+        client_name: 'My App'
+        client_secret: '$argon2id$...'   # argon2id hash of the actual secret
+        public: false
+        authorization_policy: 'one_factor'
+        redirect_uris:
+          - 'https://myapp.YOUR_DOMAIN/api/auth/callback/authelia'
+        scopes:
+          - 'openid'
+          - 'email'
+          - 'profile'
+        userinfo_signed_response_alg: 'none'

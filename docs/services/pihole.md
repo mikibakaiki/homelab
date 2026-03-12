@@ -29,7 +29,8 @@ LAN clients
   └─► DHCP broadcast → dhcp-helper (host network)
         └─► Pi-hole DHCP :67 (172.31.0.100)
 
-Traefik → Pi-hole :8080 (web admin, /admin prefix injected by middleware)
+Traefik (file provider router, priority 100) → Pi-hole :8080 (web admin)
+  Pi-hole's own web server redirects / → /admin internally
 ```
 
 Pi-hole is on two Docker networks: `pihole_backend` (DNS/DHCP internal) and `proxy` (Traefik routing).
@@ -243,6 +244,48 @@ cd ~/homelab/docker-compose/pihole && docker compose up -d --force-recreate piho
 
 ---
 
+### Pi-hole admin page loads but CSS/JS is broken (unstyled, console shows MIME type errors)
+
+**Symptom**: Pi-hole admin opens but has no styling. Browser console shows errors like:
+
+```
+Refused to apply style from 'https://pihole.YOUR_DOMAIN/admin/vendor/bootstrap/css/bootstrap.min.css'
+because its MIME type ('text/html') is not a supported stylesheet MIME type
+```
+
+Or manifest errors redirecting through `auth.YOUR_DOMAIN`:
+
+```
+Loading a manifest from 'https://auth.YOUR_DOMAIN/?rd=https%3A%2F%2Fpihole.YOUR_DOMAIN%2Fadmin%2Fadmin%2Fimg%2F...'
+violates Content Security Policy
+```
+
+**Root cause**: Two Traefik routers match `pihole.YOUR_DOMAIN`. The compose label router has a `pihole-addprefix` middleware that prepends `/admin` to all requests. When this router wins, sub-resource fetches from the Pi-hole admin page (which already have `/admin` in their URL) get doubled to `/admin/admin/...`. Pi-hole doesn't have those paths and returns HTML — causing the MIME type mismatch.
+
+The Authelia CSP error is a secondary symptom: the doubled path doesn't exist in Pi-hole, Authelia sees it as a fresh unauthenticated request, redirects to login, and the browser receives Authelia's HTML (with its own CSP) instead of the CSS/JS.
+
+**Fix**: Ensure the file provider router wins. It must have `priority: 100` in `docker/traefik/config.yaml`:
+
+```yaml
+routers:
+  pihole:
+    priority: 100   # ← this must be present
+    ...
+```
+
+After editing `config.yaml`, restart Traefik:
+```bash
+cd ~/homelab/docker-compose/traefik && docker compose restart traefik
+```
+
+**Verify**: CSS is served correctly when Pi-hole is accessed directly (bypassing Traefik):
+```bash
+curl -o /dev/null -w "%{content_type}" http://YOUR_HOST_IP:8080/admin/vendor/bootstrap/css/bootstrap.min.css
+# Expected: text/css
+```
+
+---
+
 ### DNS: Docker containers can't resolve *.YOUR_DOMAIN
 
 Docker's internal resolver (127.0.0.11) does not use Pi-hole. Containers that need to reach local CNAMEs must use `extra_hosts`:
@@ -256,7 +299,7 @@ extra_hosts:
 
 ## Known Issues
 
-- Dual routing: Pi-hole is routed both via Docker labels and via `config.yaml` file provider (static IP). The file provider route takes precedence for some configurations.
+- **Dual router conflict (mitigated)**: Two Traefik routers match `pihole.YOUR_DOMAIN` — the file provider router in `config.yaml` and the Docker label router in `docker-compose.yaml`. The compose label router includes a `pihole-addprefix` middleware that prepends `/admin`. If the compose router wins, every sub-resource request (CSS, JS, manifest) that already has `/admin` in its URL gets a second `/admin` prepended, and Pi-hole returns HTML for all of them. Fixed by setting `priority: 100` on the file provider router. Do not remove this priority setting.
 - Image not pinned to a version tag.
 
 ---
@@ -264,6 +307,5 @@ extra_hosts:
 ## Future Configuration Options
 
 - Pin image to a specific Pi-hole v6 release tag
-- Consolidate routing to labels-only or file-provider-only (remove duplication)
 - Add regex filter groups for tracking domains
 - Evaluate moving from `FTLCONF_misc_dnsmasq_lines` DHCP option to native config

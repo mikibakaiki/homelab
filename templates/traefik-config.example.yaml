@@ -1,38 +1,136 @@
+# ===========================================================================
+# Traefik Dynamic Configuration Template
+# ===========================================================================
+#
+# This is the FILE PROVIDER config — it defines middlewares, routers, and
+# services that are NOT tied to a specific container lifecycle.
+#
+# Used for:
+#   - Services with static host IPs (Portainer via https, Pi-hole via host IP)
+#   - Shared middlewares referenced by Docker label routers
+#   - Routers that need explicit priority over Docker label routers
+#
+# Live file: ~/homelab/docker/traefik/config.yaml (gitignored — contains IPs)
+# Template:  ~/homelab/templates/traefik-config.example.yaml (this file)
+#
+# After editing the live file, Traefik must be restarted:
+#   cd ~/homelab/docker-compose/traefik && docker compose restart traefik
+# (bind-mounted files cache the inode — hot-reload does not work reliably)
+#
+# ===========================================================================
+
 http:
-  middlewares:    
+
+  # -------------------------------------------------------------------------
+  # Middlewares
+  # -------------------------------------------------------------------------
+  #
+  # Middlewares defined here are in the "file" provider.
+  # Reference them in Docker labels as: middlewareName@file
+  # Reference them in file routers as: middlewareName (no @file suffix needed)
+  #
+  middlewares:
+
+    # Strict security headers — use for most services.
+    # Includes a restrictive CSP: default-src 'self'
+    # DO NOT use for apps that load inline scripts, external fonts, or blobs.
     default-security-headers:
       headers:
-        customBrowserXSSValue: 0                            # X-XSS-Protection=1; mode=block
-        contentTypeNosniff: true                          # X-Content-Type-Options=nosniff
-        forceSTSHeader: true                              # Add the Strict-Transport-Security header even when the connection is HTTP
-        frameDeny: false                                   # X-Frame-Options=deny
+        customBrowserXSSValue: 0
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        frameDeny: false
         referrerPolicy: "strict-origin-when-cross-origin"
-        stsIncludeSubdomains: true                        # Add includeSubdomains to the Strict-Transport-Security header
-        stsPreload: true                                  # Add preload flag appended to the Strict-Transport-Security header
-        stsSeconds: 3153600                              # Set the max-age of the Strict-Transport-Security header (63072000 = 2 years)
-        contentSecurityPolicy: "default-src 'self'"     
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 3153600
+        contentSecurityPolicy: "default-src 'self'"
         customRequestHeaders:
           X-Forwarded-Proto: https
+
+    # Relaxed security headers — use for UI-heavy apps (Portainer, Authelia,
+    # any service that breaks under a strict CSP).
+    # Omits the CSP entirely so the app can set its own.
+    portainer-security-headers:
+      headers:
+        customBrowserXSSValue: 0
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        frameDeny: false
+        referrerPolicy: "strict-origin-when-cross-origin"
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 3153600
+        # No contentSecurityPolicy — Portainer and Authelia set their own
+        customRequestHeaders:
+          X-Forwarded-Proto: https
+
+    # HTTP → HTTPS redirect. Referenced by all HTTP entrypoint routers.
     https-redirectscheme:
       redirectScheme:
         scheme: https
         permanent: true
 
+    # Authelia forward-auth middleware.
+    # Add to any router HTTPS chain to protect it with Authelia SSO.
+    # The auth server address uses the Docker container name — Traefik must
+    # be on the same Docker network as the authelia container (proxy network).
+    authelia:
+      forwardAuth:
+        address: "http://authelia:9091/api/authz/forward-auth"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "Remote-User"
+          - "Remote-Groups"
+          - "Remote-Name"
+          - "Remote-Email"
+
+  # -------------------------------------------------------------------------
+  # Routers
+  # -------------------------------------------------------------------------
+  #
+  # Define routers here for services that use static IPs rather than Docker
+  # service discovery, or when you need explicit priority control.
+  #
+  # PRIORITY NOTE: Docker label routers and file provider routers compete
+  # when they share the same rule (e.g. same Host()). By default, priority
+  # is calculated from rule length — same rule = same priority = undefined
+  # winner. Set an explicit priority on the file provider router to guarantee
+  # it wins. This matters when:
+  #
+  #   - The label router defines path-prefix middlewares (addprefix, stripprefix)
+  #     that should NOT apply to all requests
+  #   - The label router has different middleware chains than the file router
+  #
+  # Example: Pi-hole's compose labels define a pihole-addprefix middleware.
+  # If the label router wins, every sub-resource URL already containing /admin
+  # gets /admin prepended again → /admin/admin/... → Pi-hole returns HTML →
+  # browser sees text/html for CSS/JS files → page renders unstyled.
+  # priority: 100 ensures the file router (no addprefix) always wins.
+  #
   routers:
+
     portainer:
       entryPoints:
         - "https"
       rule: "Host(`portainer.example.com`)"
       middlewares:
-        - default-security-headers
+        - portainer-security-headers   # relaxed CSP — Portainer needs it
         - https-redirectscheme
+        - authelia
       tls: {}
       service: portainer
+
+    # Pi-hole router.
+    # priority: 100 is REQUIRED — see PRIORITY NOTE above.
+    # Pi-hole's compose labels also define a router with pihole-addprefix,
+    # which doubles /admin in sub-resource URLs and breaks CSS/JS loading.
+    # This file router has no addprefix — Pi-hole redirects / → /admin itself.
     pihole:
       entryPoints:
         - "https"
       rule: "Host(`pihole.example.com`)"
-      priority: 100  # must be higher than compose label router to prevent pihole-addprefix doubling /admin paths
+      priority: 100  # beats compose label router — do not remove
       middlewares:
         - default-security-headers
         - authelia
@@ -40,15 +138,24 @@ http:
         certResolver: cloudflare
       service: pihole
 
+  # -------------------------------------------------------------------------
+  # Services
+  # -------------------------------------------------------------------------
+  #
+  # Define backends for file provider routers.
+  # Use the host IP + container port, not container name, since these services
+  # may not be on a Docker network Traefik can reach by name.
+  #
   services:
+
     portainer:
       loadBalancer:
         servers:
-          - url: "https://<DHCP_RANGE_START>:9443"  # Replace with your server IP
+          - url: "https://<DHCP_RANGE_START>:9443"  # replace with your host IP
         passHostHeader: true
 
     pihole:
       loadBalancer:
         servers:
-          - url: "http://<DHCP_RANGE_START>:8080"  # Replace with your Pi-hole server IP and port
+          - url: "http://<DHCP_RANGE_START>:8080"   # replace with your host IP
         passHostHeader: true
