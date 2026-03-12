@@ -59,7 +59,7 @@ graph TD
     AU --> RA[(Redis)]
 
     WA[Watchtower] -. daily pull .-> B
-    RB[Restic Backup] -. daily 02:00 .-> USB[/mnt/backup USB]
+    RB[Restic Backup] -. daily 02:00 .-> USB[ /mnt/backup USB]
 
     subgraph "proxy network"
         B
