@@ -1,7 +1,7 @@
 # Infrastructure State Index
 
 > Last updated: 2026-03-12
-> Updated by: Phase 5 — Watchtower Deployment
+> Updated by: Phase 6 — Backup Deployment
 
 ---
 
@@ -70,6 +70,12 @@
 | `sure_app-storage` | sure-web-1, sure-worker-1 |
 | `sure_postgres-data` | sure-db-1 |
 | `sure_redis-data` | sure-redis-1 |
+
+### External Storage
+
+| Mount Point | Type | Used By |
+|---|---|---|
+| `/mnt/backup` | USB drive, ext4 | Restic backup repository |
 
 ### Bind Mounts
 
@@ -166,7 +172,7 @@ Defined via Traefik labels (dynamic):
 
 7. **No monitoring or observability stack**: No metrics, alerting, or dashboards.
 
-8. **No backup solution**: No automated backup for bind mounts or named volumes.
+8. ~~**No backup solution**~~: Deployed (Phase 6). Restic daily backup at 02:00, USB drive at `/mnt/backup`.
 
 9. **Missing infrastructure directories**: `docs/`, `plans/`, `templates/` did not exist (created in Phase 0).
 
@@ -182,3 +188,4 @@ Defined via Traefik labels (dynamic):
 | 2026-03-11 | Phase 3 | Karakeep deployed — resolved ARM64 Chrome image, Meilisearch healthcheck, Browserless v2 WebSocket auth |
 | 2026-03-11 | Phase 4 | Authelia deployed — forward-auth SSO, OIDC provider for Karakeep, user `miki` |
 | 2026-03-12 | Phase 5 | Watchtower deployed — daily auto-update, label opt-in, Docker API 1.44 override |
+| 2026-03-12 | Phase 6 | Backup deployed — Restic daily 02:00 to USB, pg_dump for Sure Postgres, 7d/4w/3m retention |
