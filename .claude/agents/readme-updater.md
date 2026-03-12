@@ -51,4 +51,9 @@ You are a README maintenance agent for this homelab repository. Your job is to r
 
 5. **Write the updated README.md**
 
-6. Report what changed (which sections were rewritten vs preserved)
+6. **Validate mermaid syntax** before writing:
+   - Node labels starting with `/` cause a lexer error: `[/path]` → add a leading space: `[ /path]`
+   - Example: `USB[ /mnt/backup USB]` not `USB[/mnt/backup USB]`
+   - Check all node labels for this pattern after writing
+
+7. Report what changed (which sections were rewritten vs preserved)
