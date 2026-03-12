@@ -32,8 +32,10 @@ http:
       entryPoints:
         - "https"
       rule: "Host(`pihole.example.com`)"
+      priority: 100  # must be higher than compose label router to prevent pihole-addprefix doubling /admin paths
       middlewares:
         - default-security-headers
+        - authelia
       tls:
         certResolver: cloudflare
       service: pihole

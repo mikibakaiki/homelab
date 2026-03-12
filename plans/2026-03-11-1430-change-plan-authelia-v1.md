@@ -454,7 +454,7 @@ docker exec redis-authelia redis-cli -a "$REDIS_PASS" DBSIZE
 
 ### Subtask 5.1 — Fix Pi-hole manifest.json CSP violation
 
-**Status**: OPEN — 2026-03-12
+**Status**: ✅ RESOLVED — 2026-03-12
 
 **Symptom**: Browser console error when loading Pi-hole admin:
 
@@ -469,26 +469,18 @@ The action has been blocked.
 
 This is a missing Authelia bypass rule — `/admin/img/favicons/manifest.json` is a static asset that should be served without auth interception (like favicons, CSS, and other static resources).
 
-**Fix**: Add a bypass rule in Authelia's `configuration.yml` for Pi-hole's manifest.json path. In the access control section, add a rule before the catch-all that bypasses auth for the manifest resource:
+**Root cause (confirmed)**: Two Traefik routers were active for `pihole.YOUR_DOMAIN`:
+1. File provider router (`config.yaml`) — no addprefix, routes directly to `:8080`
+2. Compose label router (`docker-compose.yaml`) — has `pihole-addprefix` (+`/admin`)
 
-```yaml
-access_control:
-  rules:
-    # Bypass static assets on pihole that don't need auth
-    - domain: pihole.YOUR_DOMAIN
-      resources:
-        - "^/admin/img/favicons/manifest.json$"
-        - "^/admin/img/favicons/.*$"
-      policy: bypass
-```
+The compose router was winning by default. Every sub-resource request from the Pi-hole admin page already has `/admin` in the path (e.g. `/admin/vendor/bootstrap/css/bootstrap.min.css`). The addprefix doubled it to `/admin/admin/vendor/...`, which Pi-hole doesn't serve — it returns HTML. Browser sees `text/html` for CSS/JS/manifest.
 
-**Note on path**: Requests arrive at Traefik as `pihole.YOUR_DOMAIN/` → `pihole-addprefix` middleware prepends `/admin` → container sees `/admin/...`. Authelia receives the *pre-prefix* path (`/img/favicons/manifest.json`) in the forward-auth check. Verify the actual path Authelia sees in logs before writing the bypass rule.
+**Fix applied**:
+1. Added `priority: 100` to the file provider pihole router in `docker/traefik/config.yaml` — file provider now wins, no addprefix
+2. Added Authelia bypass rule for `/admin/img/.*` on `pihole.YOUR_DOMAIN` — manifest/favicon fetches don't send cookies per browser spec (`credentials: omit`)
+3. Restarted Traefik and Authelia
 
-**Verification**:
-```bash
-# Check what path Authelia receives in forward-auth requests for pihole
-docker logs authelia --tail 100 | grep manifest
-```
+**Verification**: `curl http://YOUR_HOST_IP:8080/admin/vendor/bootstrap/css/bootstrap.min.css` returns `200 text/css`. Authelia logs now show single `/admin/` paths, not `/admin/admin/`.
 
 ---
 
