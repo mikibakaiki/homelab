@@ -41,7 +41,7 @@ services:
       # - <service>_internal  # uncomment if service has db/cache dependencies
 
     volumes:
-      - ~/homelab/docker/<service>:/data
+      - ../../docker/<service>:/data
 
     environment:
       TZ: ${TZ}
