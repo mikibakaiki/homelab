@@ -38,7 +38,7 @@ services:
       FTLCONF_dns_ignoreLocalhost: 'true'
       FTLCONF_dns_interface: 'eth0'
       FTLCONF_dns_hosts: '<PIHOLE_HOST_IP> apps.${DOMAIN_NAME}'
-      FTLCONF_dns_cnameRecords: "traefik.${DOMAIN_NAME},apps.${DOMAIN_NAME};pihole.${DOMAIN_NAME},apps.${DOMAIN_NAME};portainer.${DOMAIN_NAME},apps.${DOMAIN_NAME}"
+      FTLCONF_dns_cnameRecords: "sure.${DOMAIN_NAME},apps.${DOMAIN_NAME};traefik.${DOMAIN_NAME},apps.${DOMAIN_NAME};pihole.${DOMAIN_NAME},apps.${DOMAIN_NAME};portainer.${DOMAIN_NAME},apps.${DOMAIN_NAME};karakeep.${DOMAIN_NAME},apps.${DOMAIN_NAME};auth.${DOMAIN_NAME},apps.${DOMAIN_NAME}"
       FTLCONF_dhcp_active: 'true'
       FTLCONF_dhcp_start: '<DHCP_RANGE_START>'
       FTLCONF_dhcp_end: '<DHCP_RANGE_END>'
@@ -63,15 +63,21 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
+      # HTTP Router (redirects to HTTPS)
       - "traefik.http.routers.pihole.entrypoints=http"
       - "traefik.http.routers.pihole.rule=Host(`pihole.${DOMAIN_NAME}`)"
       - "traefik.http.routers.pihole.middlewares=pihole-https-redirect"
       - "traefik.http.middlewares.pihole-https-redirect.redirectscheme.scheme=https"
+      # HTTPS Router
       - "traefik.http.routers.pihole-secure.entrypoints=https"
       - "traefik.http.routers.pihole-secure.rule=Host(`pihole.${DOMAIN_NAME}`)"
       - "traefik.http.routers.pihole-secure.tls=true"
       - "traefik.http.routers.pihole-secure.tls.certresolver=cloudflare"
       - "traefik.http.routers.pihole-secure.service=pihole"
+      - "traefik.http.routers.pihole-secure.middlewares=pihole-addprefix,authelia@file"
+      # Middleware to add /admin prefix
+      - "traefik.http.middlewares.pihole-addprefix.addprefix.prefix=/admin"
+      # Service configuration
       - "traefik.http.services.pihole.loadbalancer.server.port=8080"
 
   dhcp-helper:
