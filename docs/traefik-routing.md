@@ -47,12 +47,10 @@ Resolver name: `cloudflare`
 |---|---|---|---|---|---|
 | `traefik` (http) | http | `traefik.YOUR_DOMAIN` | — | traefik-https-redirect | No |
 | `traefik-secure` (https) | https | `traefik.YOUR_DOMAIN` | `api@internal` | traefik-auth (BasicAuth) | Yes |
-| `pihole` (http label) | http | `pihole.YOUR_DOMAIN` | — | pihole-https-redirect | No |
-| `pihole-secure` (https label) | https | `pihole.YOUR_DOMAIN` | pihole (:8080) | pihole-addprefix, **authelia** | Yes |
-| `pihole` (file) | https | `pihole.YOUR_DOMAIN` | pihole (static IP :8080) | default-security-headers, **authelia** | Yes |
-| `portainer` (file) | https | `portainer.YOUR_DOMAIN` | portainer (static IP :9443) | portainer-security-headers, https-redirectscheme, **authelia** | Yes |
-| `portainer` (label http) | http | `portainer.YOUR_DOMAIN` | — | portainer-https-redirect | No |
-| `portainer-secure` (label https) | https | `portainer.YOUR_DOMAIN` | portainer (:9000) | portainer-headers, **authelia@file** | Yes |
+| `pihole-http` (file) | http | `pihole.YOUR_DOMAIN` | pihole | https-redirectscheme | No |
+| `pihole` (file) | https | `pihole.YOUR_DOMAIN` | pihole (container :8080) | default-security-headers, **authelia** | Yes |
+| `portainer-http` (file) | http | `portainer.YOUR_DOMAIN` | portainer | https-redirectscheme | No |
+| `portainer` (file) | https | `portainer.YOUR_DOMAIN` | portainer (container :9000) | portainer-security-headers, **authelia** | Yes |
 | `sure` (http) | http | `sure.YOUR_DOMAIN` | — | https-redirectscheme@file | No |
 | `sure-secure` (https) | https | `sure.YOUR_DOMAIN` | sure (:3000) | sure-security-headers@file | Yes |
 | `authelia` (http) | http | `auth.YOUR_DOMAIN` | — | https-redirectscheme@file | No |
@@ -82,10 +80,6 @@ Resolver name: `cloudflare`
 | `traefik-auth` | BasicAuth | Traefik dashboard |
 | `traefik-https-redirect` | Redirect HTTPS | Traefik HTTP router |
 | `sslheader` | RequestHeader | Defined but not applied to any router |
-| `pihole-https-redirect` | Redirect HTTPS | Pi-hole HTTP router |
-| `pihole-addprefix` | AddPrefix `/admin` | Pi-hole HTTPS router |
-| `portainer-https-redirect` | Redirect HTTPS | Portainer HTTP router |
-| `portainer-headers` | Headers | Portainer HTTPS router (label defined but body empty) |
 
 ---
 
@@ -102,13 +96,13 @@ In `docker-compose/sure/compose.yml`, the `sure-secure` router has two middlewar
 
 Docker labels are a flat key-value map. The second line silently overwrites the first. Only `sure-security-headers@file` is applied. The first label has no effect.
 
-### 2. Portainer — dual routing (labels + file provider)
+### ~~2. Portainer — dual routing (labels + file provider)~~
 
-Portainer has routes defined in both the Docker labels and `config.yaml`. The file provider route uses the static LAN IP (`<PIHOLE_HOST_IP>:9443`), while the label route uses container port `:9000`. This creates two competing routers for the same hostname. Should be consolidated.
+Fixed 2026-03-12: All routing moved to file provider. `traefik.enable=false` on portainer compose. Service now routes to `http://portainer:9000` (container name, HTTP). The broken `portainer-headers` label middleware is removed.
 
-### 3. Pi-hole — dual routing (labels + file provider)
+### ~~3. Pi-hole — dual routing (labels + file provider)~~
 
-Same issue as Portainer. Pi-hole is routed via labels (port 8080 via container discovery) and via `config.yaml` (static IP <PIHOLE_HOST_IP>:8080). Should be consolidated.
+Fixed 2026-03-12: All routing moved to file provider. `traefik.enable=false` on pihole compose. Service now routes to `http://pihole:8080` (container name). The `pihole-addprefix` middleware and `priority: 100` workaround are gone.
 
 ---
 

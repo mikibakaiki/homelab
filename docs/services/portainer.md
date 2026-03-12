@@ -18,8 +18,7 @@ Portainer CE provides a web UI for managing the Docker environment — container
 ## Architecture Role
 
 ```
-Traefik → portainer.YOUR_DOMAIN → Portainer :9000 (via proxy network, label route)
-                                              :9443 (via config.yaml static IP route)
+Traefik (file provider) → portainer.YOUR_DOMAIN → portainer:9000 (container name, proxy network)
 
 Portainer → /var/run/docker.sock (read-only) → Docker Engine
 ```
@@ -59,23 +58,19 @@ docker exec -it portainer /usr/local/bin/portainer --admin-password-file /tmp/pa
 
 ## Routing Notes
 
-Portainer has a dual-routing problem (known issue, recorded in Phase 0):
+All routing is handled by the Traefik file provider in `docker/traefik/config.yaml`. The compose file has `traefik.enable=false`.
 
-- **Docker labels** route to container port `:9000` (HTTP) via `proxy` network autodiscovery.
-- **`config.yaml` file provider** routes to `https://<PIHOLE_HOST_IP>:9443` (HTTPS, static IP).
+- **HTTP router** (`portainer-http`): redirects to HTTPS via `https-redirectscheme`
+- **HTTPS router** (`portainer`): routes to `http://portainer:9000` (container name on `proxy` network) with `portainer-security-headers` + `authelia`
 
-Both define a router named `portainer` for `portainer.YOUR_DOMAIN`. This should be consolidated in a future change plan. Currently the file-provider route is likely dominant for the HTTPS path.
-
-The `portainer-headers` middleware referenced in labels is defined as a label key with no body — it is effectively empty and applies no headers.
+No Docker label routing. No static IPs.
 
 ---
 
 ## Known Issues
 
-- Dual routing (see above).
 - Image not pinned to a version tag.
-- Host ports `9000:9000` and `9443:9443` are exposed — these allow direct LAN access bypassing Traefik. This is acceptable for admin fallback but represents a wider attack surface.
-- `portainer-headers` middleware label is a no-op.
+- Host ports `9000:9000` and `9443:9443` are exposed — these allow direct LAN access bypassing Traefik and Authelia. Acceptable as an admin fallback but represents a wider attack surface.
 
 ---
 

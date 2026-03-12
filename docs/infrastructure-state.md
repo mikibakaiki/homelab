@@ -98,8 +98,8 @@
 ```
 Internet
   └─► Traefik (80/443)
-        ├─► Pi-hole web (pihole.YOUR_DOMAIN → 172.31.0.100:8080)
-        ├─► Portainer (portainer.YOUR_DOMAIN → <PIHOLE_HOST_IP>:9443)
+        ├─► Pi-hole web (pihole.YOUR_DOMAIN → pihole:8080)
+        ├─► Portainer (portainer.YOUR_DOMAIN → portainer:9000)
         ├─► Sure (sure.YOUR_DOMAIN → sure-web-1:3000)
         └─► Traefik dashboard (traefik.YOUR_DOMAIN → api@internal)
 
@@ -139,9 +139,6 @@ Defined via Traefik labels (dynamic):
 | `traefik-https-redirect` | Redirect | traefik HTTP router |
 | `sslheader` | RequestHeaders | (defined, not applied) |
 | `pihole-https-redirect` | Redirect | pihole HTTP router |
-| `pihole-addprefix` | AddPrefix (`/admin`) | pihole HTTPS router |
-| `portainer-https-redirect` | Redirect | portainer HTTP router |
-| `portainer-headers` | Headers | portainer HTTPS router (label ref, empty) |
 | `sure` HTTP middlewares | Redirect | sure HTTP router |
 
 ---
@@ -162,7 +159,7 @@ Defined via Traefik labels (dynamic):
 
 2. ~~**Sure port 3000 exposed on host**~~: Fixed 2026-03-12 — `ports:` removed from sure web compose. Container recreated; port no longer bound on host.
 
-3. **Dual routing for Portainer and Pi-hole**: Both are defined in `config.yaml` (file provider) *and* via Docker labels. This creates redundant routes. The file provider routes use static IPs (`<PIHOLE_HOST_IP>:9443`) while labels use container discovery.
+3. ~~**Dual routing for Portainer and Pi-hole**~~: Fixed 2026-03-12 — all routing moved to file provider, compose labels removed, static IPs replaced with container names (`portainer:9000`, `pihole:8080`).
 
 4. **All images use `:latest` tag**: No version pinning. Uncontrolled updates on `docker compose pull`.
 

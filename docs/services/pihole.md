@@ -29,7 +29,7 @@ LAN clients
   └─► DHCP broadcast → dhcp-helper (host network)
         └─► Pi-hole DHCP :67 (172.31.0.100)
 
-Traefik (file provider router, priority 100) → Pi-hole :8080 (web admin)
+Traefik (file provider) → Pi-hole pihole:8080 (web admin)
   Pi-hole's own web server redirects / → /admin internally
 ```
 
@@ -260,29 +260,9 @@ Loading a manifest from 'https://auth.YOUR_DOMAIN/?rd=https%3A%2F%2Fpihole.YOUR_
 violates Content Security Policy
 ```
 
-**Root cause**: Two Traefik routers match `pihole.YOUR_DOMAIN`. The compose label router has a `pihole-addprefix` middleware that prepends `/admin` to all requests. When this router wins, sub-resource fetches from the Pi-hole admin page (which already have `/admin` in their URL) get doubled to `/admin/admin/...`. Pi-hole doesn't have those paths and returns HTML — causing the MIME type mismatch.
+**Root cause (historical)**: When both a Docker label router and file provider router matched `pihole.YOUR_DOMAIN`, the label router's `pihole-addprefix` middleware doubled the `/admin` prefix on sub-resource URLs, causing MIME type errors and Authelia CSP redirect loops.
 
-The Authelia CSP error is a secondary symptom: the doubled path doesn't exist in Pi-hole, Authelia sees it as a fresh unauthenticated request, redirects to login, and the browser receives Authelia's HTML (with its own CSP) instead of the CSS/JS.
-
-**Fix**: Ensure the file provider router wins. It must have `priority: 100` in `docker/traefik/config.yaml`:
-
-```yaml
-routers:
-  pihole:
-    priority: 100   # ← this must be present
-    ...
-```
-
-After editing `config.yaml`, restart Traefik:
-```bash
-cd ~/homelab/docker-compose/traefik && docker compose restart traefik
-```
-
-**Verify**: CSS is served correctly when Pi-hole is accessed directly (bypassing Traefik):
-```bash
-curl -o /dev/null -w "%{content_type}" http://YOUR_HOST_IP:8080/admin/vendor/bootstrap/css/bootstrap.min.css
-# Expected: text/css
-```
+**Fix applied 2026-03-12**: Dual routing eliminated. All Pi-hole routing now lives in the file provider (`docker/traefik/config.yaml`). Compose file has `traefik.enable=false`. The `pihole-addprefix` middleware and `priority: 100` workaround no longer exist. Pi-hole's own web server handles the `/` → `/admin` redirect internally.
 
 ---
 
@@ -299,7 +279,7 @@ extra_hosts:
 
 ## Known Issues
 
-- **Dual router conflict (mitigated)**: Two Traefik routers match `pihole.YOUR_DOMAIN` — the file provider router in `config.yaml` and the Docker label router in `docker-compose.yaml`. The compose label router includes a `pihole-addprefix` middleware that prepends `/admin`. If the compose router wins, every sub-resource request (CSS, JS, manifest) that already has `/admin` in its URL gets a second `/admin` prepended, and Pi-hole returns HTML for all of them. Fixed by setting `priority: 100` on the file provider router. Do not remove this priority setting.
+- ~~**Dual router conflict**~~: Fixed 2026-03-12. All routing in file provider; compose has `traefik.enable=false`.
 - Image not pinned to a version tag.
 
 ---
