@@ -33,6 +33,7 @@ services:
         condition: service_started
 
     labels:
+      - "com.centurylinklabs.watchtower.enable=true"
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
 
@@ -58,6 +59,8 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
     networks:
       - karakeep_internal
@@ -81,6 +84,8 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
     networks:
       - karakeep_internal

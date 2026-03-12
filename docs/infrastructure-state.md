@@ -1,7 +1,7 @@
 # Infrastructure State Index
 
-> Last updated: 2026-03-11
-> Updated by: Phase 0 — Infrastructure Discovery
+> Last updated: 2026-03-12
+> Updated by: Phase 5 — Watchtower Deployment
 
 ---
 
@@ -45,6 +45,7 @@
 | Karakeep Chrome | `ghcr.io/browserless/chromium:latest` | latest | internal only | Running |
 | Authelia | `ghcr.io/authelia/authelia:4.38` | v4.38.19 | `auth.YOUR_DOMAIN` | Running (healthy) |
 | Redis (Authelia) | `redis:7-alpine` | 7 | internal only | Running (healthy) |
+| Watchtower | `containrrr/watchtower:latest` | 1.7.1 | internal only | Running |
 
 ---
 
@@ -145,7 +146,7 @@ Defined via Traefik labels (dynamic):
 |---|---|---|---|
 | Karakeep | `karakeep.YOUR_DOMAIN` | `plans/2026-03-11-1200-change-plan-karakeep-v1.md` | Deployed (Phase 3 complete) |
 | Authelia | `auth.YOUR_DOMAIN` | `plans/2026-03-11-1430-change-plan-authelia-v1.md` | Deployed (Phase 4 complete) |
-| Watchtower | internal | TBD (Phase 5) | Planned |
+| Watchtower | internal | `plans/2026-03-12-1200-change-plan-watchtower-v1.md` | Deployed (Phase 5 complete) |
 
 ---
 
@@ -161,7 +162,7 @@ Defined via Traefik labels (dynamic):
 
 5. ~~**No Authelia**~~: Authelia deployed (Phase 4). Karakeep, Portainer, Pi-hole protected. Traefik dashboard intentionally kept on BasicAuth only (diagnostic tool — must remain reachable if Authelia fails).
 
-6. **No Watchtower**: No automated update management.
+6. ~~**No Watchtower**~~: Deployed (Phase 5). Daily 04:00 schedule, label opt-in mode.
 
 7. **No monitoring or observability stack**: No metrics, alerting, or dashboards.
 
@@ -180,3 +181,4 @@ Defined via Traefik labels (dynamic):
 | 2026-03-11 | Phase 2 | Karakeep architecture: change plan and service doc created |
 | 2026-03-11 | Phase 3 | Karakeep deployed — resolved ARM64 Chrome image, Meilisearch healthcheck, Browserless v2 WebSocket auth |
 | 2026-03-11 | Phase 4 | Authelia deployed — forward-auth SSO, OIDC provider for Karakeep, user `miki` |
+| 2026-03-12 | Phase 5 | Watchtower deployed — daily auto-update, label opt-in, Docker API 1.44 override |

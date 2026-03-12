@@ -32,6 +32,7 @@ services:
       - ../../docker/traefik/config.yaml:/config.yaml:ro
       - ../../docker/traefik/logs:/var/log/traefik
     labels:
+      - "com.centurylinklabs.watchtower.enable=true"
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.entrypoints=http"
       - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN_NAME}`)"

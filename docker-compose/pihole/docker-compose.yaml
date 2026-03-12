@@ -14,6 +14,8 @@ services:
       - "TUNNEL_DNS_ADDRESS=0.0.0.0"  # Listen on all interfaces for Pi-hole to reach
     security_opt:
       - no-new-privileges:true
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
   pihole:
     container_name: pihole
     hostname: pihole-server
@@ -61,6 +63,7 @@ services:
       - "53:53/udp"
       - "8080:8080/tcp"
     labels:
+      - "com.centurylinklabs.watchtower.enable=true"
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       # HTTP Router (redirects to HTTPS)
@@ -92,6 +95,8 @@ services:
       - NET_ADMIN
     depends_on:
       - pihole
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
 networks:
   backend:
