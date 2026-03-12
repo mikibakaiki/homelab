@@ -152,9 +152,9 @@ Defined via Traefik labels (dynamic):
 
 ## Known Issues (Discovered Phase 0)
 
-1. **Duplicate middleware label on Sure**: The `sure-secure` router has two `traefik.http.routers.sure-secure.middlewares` labels — only the last one (`sure-security-headers@file`) is applied. The redirect middleware label is silently overridden.
+1. ~~**Duplicate middleware label on Sure**~~: Fixed during Phase 4 — labels collapsed to a single comma-separated value (`sure-security-headers@file,authelia@file`).
 
-2. **Sure port 3000 exposed on host**: `ports: 3000:3000` in sure compose bypasses Traefik and exposes the app directly to the LAN. This is a security concern — the port should not be host-exposed if Traefik is the intended access point.
+2. ~~**Sure port 3000 exposed on host**~~: Fixed 2026-03-12 — `ports:` removed from sure web compose. Container recreated; port no longer bound on host.
 
 3. **Dual routing for Portainer and Pi-hole**: Both are defined in `config.yaml` (file provider) *and* via Docker labels. This creates redundant routes. The file provider routes use static IPs (`<PIHOLE_HOST_IP>:9443`) while labels use container discovery.
 
