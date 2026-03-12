@@ -373,6 +373,52 @@ Template must include:
 
 ------------------------------------------------------------------------
 
+# Repository Privacy & Commit Standards
+
+The git repository is public. All committed content must be free of
+personally identifiable or infrastructure-specific data.
+
+## What Must Never Appear in Committed Files or Commit Messages
+
+-   Real domain names → use `YOUR_DOMAIN` in static files, `${DOMAIN_NAME}` in compose files
+-   Absolute paths containing usernames → use `~/homelab/` in docs, `../../docker/<service>/` in compose volume mounts
+-   Real email addresses
+-   Real IP addresses of LAN hosts
+-   Passwords, tokens, secrets of any kind
+
+## File Classification
+
+**Committed with placeholders** (`docker-compose/`, `docs/`, `plans/`, `templates/`):
+
+-   `docker-compose.yaml` / `compose.yml` — use `${DOMAIN_NAME}` for domain references, relative paths (`../../docker/<service>/`) for volume mounts
+-   `.env.example` — use `YOUR_DOMAIN`, `YOUR_SECRET`, etc.
+-   Markdown docs and plans — use `YOUR_DOMAIN`, `~/homelab/` paths
+
+**Gitignored — real values live on host only** (`docker/`, `.env` files):
+
+-   `docker/` — all runtime container data (configs, databases, certs, logs)
+-   `.env` — real secrets, real domain, real credentials
+-   `users_database.yml` — real email addresses
+
+## Commit Message Rules
+
+-   No domain names, IP addresses, email addresses, or usernames
+-   Use generic terms: "the local domain", "the host IP", "the LAN range"
+-   Commit after each meaningful change — don't batch unrelated changes
+-   One service or logical change per commit
+
+## New Service Checklist
+
+Before committing a new service:
+
+1.  Volume mounts use relative paths (`../../docker/<service>/...`)
+2.  Domain references use `${DOMAIN_NAME}` in compose, `YOUR_DOMAIN` in `.env.example`
+3.  `.env.example` committed, `.env` gitignored
+4.  No absolute paths containing usernames anywhere in tracked files
+5.  `docker/` data directory is gitignored (covered by top-level `docker/` rule)
+
+------------------------------------------------------------------------
+
 # Execution Phases
 
 Phase 0 --- Infrastructure Discovery\
