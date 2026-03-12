@@ -1,50 +1,79 @@
 # 🏠 Homelab Infrastructure
 
-A comprehensive Docker-based homelab setup featuring Pi-hole DNS/DHCP, Traefik reverse proxy, and container management with security best practices.
+A Docker-based homelab on Raspberry Pi 4 running a full self-hosted stack with reverse proxy, DNS/DHCP, SSO, bookmarks, backups, and automated updates.
 
 ## 🚀 Overview
 
-This repository contains a production-ready homelab infrastructure built around:
-- **Network-wide ad blocking** with Pi-hole v6
-- **Encrypted DNS** via Cloudflared DNS-over-HTTPS
-- **HTTPS reverse proxy** with Traefik and Let's Encrypt
+This repository contains the infrastructure for a production-grade homelab built around:
+- **Network-wide ad blocking** with Pi-hole v6 + Cloudflared DNS-over-HTTPS
+- **HTTPS reverse proxy** with Traefik and Let's Encrypt wildcard certificates
+- **Single Sign-On** with Authelia (forward-auth + OIDC provider)
 - **Container management** with Portainer
-- **Secure configuration** with environment variables and secrets
+- **Bookmarks** with Karakeep (OIDC via Authelia)
+- **Internal app** Sure (Authelia gate + app-level login)
+- **Automated image updates** with Watchtower (daily 04:00, label opt-in)
+- **Daily encrypted backups** with Restic to USB drive
 
 ## 📋 Services
 
-| Service | Purpose | Access | Status |
-|---------|---------|---------|---------|
-| **Pi-hole** | DNS/DHCP + Ad Blocking | https://pihole.your.domain | 🟢 Active |
-| **Traefik** | Reverse Proxy + SSL | https://traefik.your.domain | 🟢 Active |
-| **Portainer** | Container Management | https://portainer.your.domain | 🟢 Active |
-| **Cloudflared** | DoH DNS Proxy | Internal only | 🟢 Active |
+| Service | Purpose | Access | Auth | Status |
+|---------|---------|---------|---------|---------|
+| **Traefik** | Reverse proxy + SSL termination | `https://traefik.your.domain` | BasicAuth | 🟢 Active |
+| **Pi-hole** | DNS/DHCP + ad blocking | `https://pihole.your.domain` | Authelia | 🟢 Active |
+| **Cloudflared** | DNS-over-HTTPS proxy | Internal only | — | 🟢 Active |
+| **Portainer** | Container management | `https://portainer.your.domain` | Authelia | 🟢 Active |
+| **Authelia** | SSO gateway + OIDC provider | `https://auth.your.domain` | — | 🟢 Active |
+| **Karakeep** | Bookmark manager | `https://karakeep.your.domain` | Authelia OIDC (SSO) | 🟢 Active |
+| **Sure** | Internal app | `https://sure.your.domain` | Authelia + app login | 🟢 Active |
+| **Watchtower** | Automated image updates | Internal only | — | 🟢 Active |
+| **Restic Backup** | Daily encrypted backup to USB | Internal only | — | 🟢 Active |
 
 ## 🏗️ Architecture
 
 ```mermaid
 graph TD
-    A[Internet] --> B[Traefik Reverse Proxy]
-    B --> C[Pi-hole Web Interface]
-    B --> D[Portainer Dashboard]
-    B --> E[Traefik Dashboard]
-    
-    F[LAN Clients] --> G[Pi-hole DNS/DHCP]
-    G --> H[Cloudflared DoH]
-    H --> I[Cloudflare/Quad9 DNS]
-    
-    J[DHCP Helper] --> G
-    
-    subgraph "Docker Networks"
-        K[Proxy Network]
-        L[Pi-hole Backend]
+    A[Internet] --> B[Traefik :80/:443]
+    B --> AU[Authelia auth.your.domain]
+    B --> C[Pi-hole pihole.your.domain]
+    B --> D[Portainer portainer.your.domain]
+    B --> E[Traefik Dashboard traefik.your.domain]
+    B --> K[Karakeep karakeep.your.domain]
+    B --> S[Sure sure.your.domain]
+
+    AU -- ForwardAuth gate --> C
+    AU -- ForwardAuth gate --> D
+    AU -- ForwardAuth gate --> K
+    AU -- ForwardAuth gate --> S
+    AU -- OIDC provider --> K
+
+    F[LAN Clients] --> G[Pi-hole DNS/DHCP :53]
+    G --> H[Cloudflared DoH :5053]
+    H --> I[Cloudflare 1.1.1.1 / Quad9 9.9.9.9]
+
+    J[DHCP Helper host-net] --> G
+
+    S --> SDB[(PostgreSQL 16)]
+    S --> SR[(Redis)]
+    K --> MS[(Meilisearch)]
+    K --> CH[Chromium headless]
+    AU --> RA[(Redis)]
+
+    WA[Watchtower] -. daily pull .-> B
+    RB[Restic Backup] -. daily 02:00 .-> USB[/mnt/backup USB]
+
+    subgraph "proxy network"
+        B
+        AU
+        C
+        D
+        K
+        S
     end
-    
-    B -.-> K
-    C -.-> K
-    C -.-> L
-    G -.-> L
-    H -.-> L
+
+    subgraph "pihole_backend 172.31.0.0/24"
+        C
+        H
+    end
 ```
 
 ## 🔧 Quick Start
@@ -57,342 +86,254 @@ graph TD
 
 ### Setup
 
-1. **Clone and prepare environment**:
+1. **Clone and prepare environment files**:
    ```bash
    git clone <your-repo>
    cd homelab
-   
-   # Create environment files from templates
+
    cp docker-compose/traefik/.env.example docker-compose/traefik/.env
    cp docker-compose/pihole/.env.example docker-compose/pihole/.env
+   cp docker-compose/authelia/.env.example docker-compose/authelia/.env
+   cp docker-compose/karakeep/.env.example docker-compose/karakeep/.env
    ```
 
 2. **Configure secrets**:
    ```bash
-   # Set up Cloudflare API token
    echo "your_cloudflare_api_token" > docker-compose/traefik/cf-token
    chmod 600 docker-compose/traefik/cf-token
-   
-   # Edit environment files
-   nano docker-compose/traefik/.env
-   nano docker-compose/pihole/.env
    ```
 
 3. **Create Docker networks**:
    ```bash
-   # Create the external proxy network (required for Traefik ↔ Pi-hole communication)
    docker network create proxy
-   
-   # Verify network creation
-   docker network ls | grep proxy
    ```
 
-4. **Start services**:
+4. **Start services** (Traefik and Pi-hole first):
    ```bash
-   # Start Traefik first
-   cd docker-compose/traefik
-   docker compose up -d
-   
-   # Start Pi-hole
-   cd ../pihole
-   docker compose up -d
+   cd docker-compose/traefik && docker compose up -d
+   cd docker-compose/pihole && docker compose up -d
+   cd docker-compose/authelia && docker compose up -d
+   cd docker-compose/karakeep && docker compose up -d
+   cd docker-compose/sure && docker compose up -d
+   cd docker-compose/portainer && docker compose up -d
+   cd docker-compose/watchtower && docker compose up -d
    ```
 
-5. **Verify setup**:
+5. **Verify**:
    ```bash
-   # Check all services
    docker ps
-   
-   # Verify network connectivity
    docker network inspect proxy
-   
-   # Test DNS resolution
-   nslookup google.com <your-pihole-ip>
-   
-   # Access web interfaces
-   curl -I https://pihole.your.domain
    ```
 
 ## 📁 Repository Structure
 
 ```
 homelab/
-├── docker-compose/                 # Service configurations
-│   ├── traefik/                   # Reverse proxy setup
-│   │   ├── docker-compose.yaml    # Traefik service definition
-│   │   ├── .env.example          # Environment template
-│   │   ├── cf-token.example      # Cloudflare token template
-│   │   └── README.md             # Traefik-specific docs
-│   └── pihole/                   # DNS/DHCP setup
-│       ├── docker-compose.yaml   # Pi-hole stack definition
-│       ├── .env.example         # Environment template
-│       └── README.md            # Pi-hole-specific docs
-├── docker/                       # Persistent data & configs
-│   ├── traefik/                 # Traefik configuration files
-│   │   ├── traefik.yaml         # Main Traefik config
-│   │   ├── config.yaml          # Dynamic routing config
-│   │   ├── acme.json           # Let's Encrypt certificates
-│   │   └── logs/               # Access & error logs
-│   └── pihole/                 # Pi-hole data directory
-│       └── pihole/             # Pi-hole configuration & databases
-├── .gitignore                  # Security-focused ignore rules
-├── SECURITY-SETUP.md          # Security configuration guide
-└── README.md                  # This file
+├── docker-compose/              # Service compose files + env templates
+│   ├── traefik/
+│   ├── pihole/
+│   ├── portainer/
+│   ├── authelia/
+│   ├── karakeep/
+│   ├── sure/
+│   ├── watchtower/
+│   └── backup/
+├── docker/                      # Persistent bind-mount data (runtime, gitignored)
+│   ├── traefik/
+│   │   ├── traefik.yaml         # Traefik static config
+│   │   ├── config.yaml          # Traefik dynamic config (middlewares, file routers)
+│   │   ├── acme.json            # Let's Encrypt certificates (chmod 600, gitignored)
+│   │   └── logs/
+│   ├── pihole/
+│   └── authelia/
+│       └── config/              # configuration.yml + users_database.yml (root-owned)
+├── docs/                        # Infrastructure documentation
+│   └── services/                # Per-service docs
+├── plans/                       # Change plans (YYYY-MM-DD-HHMM-change-plan-<svc>-v1.md)
+├── templates/                   # Reusable compose + config templates
+├── .claude/
+│   ├── skills/                  # Claude Code slash-command skills
+│   └── agents/                  # Claude Code sub-agents
+├── .gitignore
+└── README.md
 ```
 
-## 🔒 Security Features
+## 🔒 Security
 
-### Data Protection
-- **Environment variables** for all sensitive configuration
-- **Docker secrets** for API tokens and certificates
-- **Comprehensive .gitignore** preventing credential exposure
-- **Example files** for safe version control
+### Secrets & Environment Files
+- `.env` files are gitignored — only `.env.example` files are committed
+- Cloudflare API token in `docker-compose/traefik/cf-token` (gitignored, injected as Docker secret)
+- `docker/traefik/acme.json` must be `chmod 600` and is gitignored
+- Template workflow: `cp .env.example .env` then fill in values
 
-### Network Security
-- **HTTPS only** access via Traefik with automatic SSL
-- **Network isolation** with Docker bridge networks
-- **DNSSEC validation** for DNS security
-- **Internal service communication** on isolated networks
+### Network Isolation
+- **`proxy` network** (external, created manually): all services needing HTTPS access join this
+- **`pihole_backend`** (internal, auto-created): Pi-hole ↔ Cloudflared only, subnet `172.31.0.0/24`
+- **Service-internal networks**: Sure, Karakeep, and Authelia each have isolated internal networks for their databases/caches
 
-### Container Security
-- **Non-privileged containers** where possible
-- **Read-only mounts** for configuration files
-- **Security options** (`no-new-privileges`)
-- **Regular image updates** for security patches
+### Authentication
+- **Authelia** gates all services via Traefik ForwardAuth middleware
+- **Traefik dashboard** intentionally uses BasicAuth only (must remain reachable if Authelia is down)
+- **Karakeep** uses Authelia as OIDC provider — single login, no local credentials
+- **Sure** uses Authelia gate + its own app-level login
 
 ## 🛠️ Configuration Details
 
 ### Docker Networks
 
-This homelab uses **two separate Docker networks** for security and functionality:
+| Network | Driver | Scope | Connected Services |
+|---------|--------|-------|-------------------|
+| `proxy` | bridge | external (manual) | traefik, pihole, portainer, sure-web, karakeep, authelia |
+| `pihole_backend` | bridge | auto (pihole compose) | pihole, cloudflared |
+| `sure_sure_net` | bridge | auto | sure-web, sure-worker, sure-db, sure-redis |
+| `karakeep_internal` | bridge | auto | karakeep, meilisearch, karakeep-chrome |
+| `authelia_internal` | bridge | auto | authelia, redis-authelia |
 
-#### 1. **Proxy Network** (External)
-- **Purpose**: Enables Traefik to route HTTPS traffic to services
-- **Type**: Bridge network (created manually)
-- **Creation**: `docker network create proxy`
-- **Connected Services**: Traefik, Pi-hole, Portainer
-- **Required**: Must be created before starting any services
+### Traefik Middleware Registry
 
-#### 2. **Backend Network** (Internal)
-- **Purpose**: Internal communication between Pi-hole and Cloudflared
-- **Type**: Bridge network (created automatically by compose)
-- **Subnet**: `172.31.0.0/24`
-- **Connected Services**: Pi-hole, Cloudflared
-- **Pi-hole Static IP**: `172.31.0.100`
+Defined in `docker/traefik/config.yaml` (file provider):
 
-### Environment Variables
+| Middleware | Type | Used By |
+|-----------|------|---------|
+| `default-security-headers` | Headers (strict CSP) | pihole |
+| `portainer-security-headers` | Headers (no CSP) | portainer, authelia |
+| `sure-security-headers` | Headers (no CSP) | sure |
+| `karakeep-security-headers` | Headers (no CSP) | karakeep |
+| `https-redirectscheme` | Redirect HTTPS | HTTP routers |
+| `authelia` | ForwardAuth | karakeep, portainer, pihole, sure |
 
-**Traefik (.env)**:
-```env
-your.domain=your.domain
-ACME_EMAIL=your-email@example.com
-TZ=Europe/Lisbon
-TRAEFIK_DASHBOARD_CREDENTIALS=admin:$2y$05$hashedpassword
-```
-
-**Pi-hole (.env)**:
-```env
-PIHOLE_PASSWORD=your_secure_password
-TZ=Europe/Lisbon
-PIHOLE_DASHBOARD_CREDENTIALS=admin:$2y$05$hashedpassword
-```
+### DNS Configuration
+- Upstream: Cloudflared DoH → Cloudflare (1.1.1.1) + Quad9 (9.9.9.9)
+- DHCP range and static IP configured via `FTLCONF_*` environment variables (Pi-hole v6)
+- `dhcp-helper` container runs in host network mode to relay LAN DHCP broadcasts to Pi-hole on bridge network
 
 ### Network Configuration
 - **Domain**: `your.domain` (Cloudflare managed)
-- **LAN Subnet**: `<YOUR_LAN_SUBNET>`
-- **DHCP Range**: `<DHCP_RANGE_START>-<DHCP_RANGE_END>`
+- **Certificates**: Let's Encrypt wildcard `*.your.domain` via Cloudflare DNS challenge
 - **Pi-hole IP**: `<PIHOLE_HOST_IP>`
 - **Router Gateway**: `<ROUTER_IP>`
-
-### DNS Configuration
-- **Upstream**: Cloudflared DoH → Cloudflare (1.1.1.1) + Quad9 (9.9.9.9)
-- **Blocking**: 894,108+ domains across 12 curated lists
-- **Features**: DNSSEC, custom local domains, regex filtering
+- **DHCP Range**: `<DHCP_RANGE_START>`–`<DHCP_RANGE_END>`
 
 ## 📊 Monitoring & Maintenance
 
 ### Health Checks
 ```bash
-# Service status
 docker compose ps
-
-# Container health
 docker stats
-
-# Pi-hole query logs
-docker logs pihole --tail 50
-
-# Traefik access logs
 docker logs traefik --tail 50
+docker logs pihole --tail 50
+docker logs authelia --tail 50
 ```
 
-### Updates
+### Watchtower (Automated Updates)
+Watchtower runs daily at 04:00 and updates containers that have the opt-in label:
+```yaml
+labels:
+  - "com.centurylinklabs.watchtower.enable=true"
+```
+Containers without this label are never touched automatically.
+
+### Restic Backup
+Daily backup runs at 02:00 via a systemd timer (or cron). Targets:
+- All bind-mount data under `docker/`
+- `pg_dump` of the Sure PostgreSQL database
+
+Retention policy: **7 daily / 4 weekly / 3 monthly** snapshots.
+Repository location: `/mnt/backup` (USB drive, ext4).
+
 ```bash
-# Update images
-docker compose pull
-docker compose up -d
+# Check backup status manually
+restic -r /mnt/backup snapshots
 
-# Update Pi-hole gravity
-docker exec pihole pihole -g
-
-# Backup before updates
-./scripts/backup.sh  # (if you create one)
+# Trigger manual backup
+systemctl start restic-backup  # or run the backup script directly
 ```
 
-### Backups
-Critical directories to backup:
-- `~/homelab/docker/` - All persistent data
-- `~/homelab/docker-compose/` - Service configurations
+### Pi-hole Blocklist Updates
+```bash
+docker exec pihole pihole -g
+```
 
 ## 🐛 Troubleshooting
 
-### Common Issues
-
-#### "network proxy not found" Error:
+### Traefik `config.yaml` Changes Require Restart
+Docker bind mounts cache the inode. After any edit to `docker/traefik/config.yaml`, always restart Traefik:
 ```bash
-# The proxy network must be created before starting services
+cd docker-compose/traefik && docker compose restart traefik
+```
+
+### Authelia Config Files Are Root-Owned
+Files in `docker/authelia/config/` are owned by root (created by Docker on first run). They cannot be edited directly with normal user tools. Use:
+```bash
+# Write to a temp file, then copy into the container
+docker cp /tmp/configuration.yml authelia:/config/configuration.yml
+docker restart authelia
+```
+
+### Containers Can't Resolve Local Domains
+Docker's internal resolver (127.0.0.11) does not use Pi-hole. Containers needing to reach local CNAMEs (e.g., `auth.your.domain`) must use `extra_hosts` in their compose file:
+```yaml
+extra_hosts:
+  - "auth.your.domain:<PIHOLE_HOST_IP>"
+```
+
+### "network proxy not found"
+```bash
 docker network create proxy
-
-# Restart services after creating network
-cd ~/homelab/docker-compose/traefik
-docker compose down && docker compose up -d
-
-cd ~/homelab/docker-compose/pihole
-docker compose down && docker compose up -d
+cd docker-compose/traefik && docker compose down && docker compose up -d
 ```
 
-#### DNS Resolution Problems:
+### DNS Resolution Problems
 ```bash
-# Check Pi-hole status
 docker exec pihole pihole status
-
-# Test internal resolution
-docker exec pihole nslookup google.com 127.0.0.1
-
-# Check Cloudflared connectivity
-docker logs cloudflared
+docker logs cloudflared --tail 30
 ```
 
-#### HTTPS Certificate Issues:
+### HTTPS Certificate Issues
 ```bash
-# Check Traefik logs
-docker logs traefik
-
-# Verify Cloudflare API token
+docker logs traefik | grep -i acme
 curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
      -H "Authorization: Bearer $(cat docker-compose/traefik/cf-token)"
 ```
 
-#### Service Access Problems:
-```bash
-# Test direct container access
-curl -I http://localhost:8080/admin/  # Pi-hole
-curl -I http://localhost:8080/  # Traefik dashboard
+### Authelia Portal Unstyled / CORS During OIDC
+Add bypass rules for static assets (`.js`, `.css`, manifest, favicon) in `docker/authelia/config/configuration.yml` under `access_control.rules`. See `docs/services/authelia.md` for the pattern.
 
-# Check network connectivity
-docker network ls
-docker network inspect proxy
+### Pi-hole Admin CSS Broken
+Ensure the file provider router for Pi-hole in `docker/traefik/config.yaml` has `priority: 100` to prevent the Docker label router from taking precedence. See `docs/services/pihole.md`.
+
+## 🚧 Adding New Services
+
+Every infrastructure change requires a change plan in `plans/` before deployment. Use the `/deploy-service` skill to scaffold a new service:
+
+```
+/deploy-service <service-name>
 ```
 
-#### Containers Can't Communicate:
-```bash
-# Verify both networks exist
-docker network ls
-
-# Check proxy network has correct containers
-docker network inspect proxy
-
-# Check Pi-hole is on both networks
-docker inspect pihole --format '{{json .NetworkSettings.Networks}}' | jq
-
-# Should show both 'pihole_backend' and 'proxy'
-```
-
-### Traefik Can't Reach Pi-hole
-
-```bash
-# Ensure both are on proxy network
-docker network inspect proxy
-
-# Check Traefik logs
-docker logs traefik | grep pihole
-
-# Restart both services
-cd ~/homelab/docker-compose/traefik
-docker compose restart
-
-cd ~/homelab/docker-compose/pihole
-docker compose restart
-```
-
-
-## 🚧 Development & Customization
-
-### Adding New Services
-1. Create service directory in `docker-compose/`
-2. Add service to `proxy` network for Traefik routing:
-   ```yaml
-   networks:
-     - proxy
-   ```
-3. Configure Traefik labels for HTTPS access
-4. Update documentation
-
-### Modifying Configuration
-1. Edit appropriate `.env` file or config template
-2. Recreate containers: `docker compose up -d`
-3. Test changes thoroughly
-4. Update documentation
-
-### Understanding Network Requirements
-
-**When to use the `proxy` network:**
-- Any service that needs HTTPS access via Traefik
-- Services with web interfaces (Pi-hole, Portainer, etc.)
-- Must be explicitly added to the `proxy` network in docker-compose.yaml
-
-**When to use internal networks:**
-- Service-to-service communication (Pi-hole ↔ Cloudflared)
-- Backend databases or caches
-- Services that shouldn't be externally accessible
+Manual checklist:
+1. Create `docker-compose/<service>/docker-compose.yaml` and `.env.example`
+2. Join the `proxy` network (`external: true`)
+3. Add Traefik labels for HTTP→HTTPS redirect and HTTPS router with `tls.certresolver=cloudflare`
+4. Add an Authelia ForwardAuth middleware if the service needs SSO protection
+5. If the service makes outbound requests to local domains, add `extra_hosts`
+6. Add a security-headers middleware to `docker/traefik/config.yaml` if a relaxed CSP is needed
+7. Restart Traefik after any `config.yaml` edits
+8. Add the Watchtower opt-in label if you want automatic updates
 
 ## 📚 Documentation
 
-- **[Security Setup Guide](SECURITY-SETUP.md)** - Detailed security configuration
-- **[Pi-hole Setup](docker-compose/pihole/README.md)** - DNS/DHCP configuration
-- **[Traefik Setup](docker-compose/traefik/README.md)** - Reverse proxy configuration
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Test changes thoroughly
-4. Update documentation
-5. Submit pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Pi-hole Team** - Excellent network-wide ad blocking
-- **Traefik Team** - Modern reverse proxy solution
-- **Cloudflare** - DNS-over-HTTPS and domain management
-- **Docker Community** - Containerization platform
+- `docs/infrastructure-state.md` — full hardware, network, and service inventory
+- `docs/services/` — per-service docs (traefik, pihole, authelia, karakeep, sure, portainer, watchtower, backup)
+- `plans/` — change plans for every deployed phase
+- `CLAUDE.md` — instructions for Claude Code agents working in this repo
 
 ---
 
 ## 📈 Status
 
-**Last Updated**: August 30, 2025  
-**Infrastructure Version**: v2.0  
-**Total Blocked Domains**: 894,108+  
-**Services**: 4 active, all healthy  
-**Uptime**: 99.9%+ target
-
-**Tested On**:
-- Raspberry Pi 4 (4GB)
-- Ubuntu Server 22.04 LTS
-- Docker Engine 24.0+
-- Docker Compose v2.20+
+**Last Updated**: 2026-03-12
+**Hardware**: Raspberry Pi 4, aarch64, Debian 12 (Bookworm)
+**Docker Engine**: 29.1.1 / Docker Compose v2.40.3
+**Active Services**: 8 (Traefik, Pi-hole, Cloudflared, Portainer, Authelia, Karakeep, Sure, Watchtower + Restic)
+**TLS**: Let's Encrypt wildcard via Cloudflare DNS challenge
+**Backup**: Restic daily to USB, 7d/4w/3m retention
