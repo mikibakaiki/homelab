@@ -160,6 +160,9 @@ yarn-error.log*
 # CUSTOM ADDITIONS
 # =============================================================================
 
+# Authelia runtime config — contains real domain, redirect URIs, and OIDC client details
+docker/authelia/config/configuration.yml
+
 # Authelia user database — contains real email addresses
 **/users_database.yml
 
