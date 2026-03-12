@@ -1,0 +1,97 @@
+services:
+  karakeep:
+    image: ghcr.io/karakeep-app/karakeep:release
+    container_name: karakeep
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+    networks:
+      - proxy
+      - karakeep_internal
+
+    volumes:
+      - ../../docker/karakeep/data:/data
+
+    env_file:
+      - .env
+
+    environment:
+      MEILI_ADDR: "http://meilisearch:7700"
+      BROWSER_WEB_URL: "http://chrome:3000"
+      BROWSER_WEBSOCKET_URL: "ws://chrome:3000/chromium/playwright"
+      DATA_DIR: "/data"
+      MEILI_NO_ANALYTICS: "true"
+
+    extra_hosts:
+      - "auth.${DOMAIN_NAME}:<PIHOLE_HOST_IP>"
+
+    depends_on:
+      meilisearch:
+        condition: service_healthy
+      chrome:
+        condition: service_started
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.karakeep.entrypoints=http"
+      - "traefik.http.routers.karakeep.rule=Host(`karakeep.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.karakeep.middlewares=https-redirectscheme@file"
+
+      # HTTPS router
+      - "traefik.http.routers.karakeep-secure.entrypoints=https"
+      - "traefik.http.routers.karakeep-secure.rule=Host(`karakeep.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.karakeep-secure.tls=true"
+      - "traefik.http.routers.karakeep-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.karakeep-secure.service=karakeep"
+      - "traefik.http.routers.karakeep-secure.middlewares=karakeep-security-headers@file,authelia@file"
+
+      # Backend
+      - "traefik.http.services.karakeep.loadbalancer.server.port=3000"
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: meilisearch
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+    networks:
+      - karakeep_internal
+
+    volumes:
+      - ../../docker/karakeep/meilisearch:/meili_data
+
+    environment:
+      MEILI_MASTER_KEY: "${MEILI_MASTER_KEY}"
+      MEILI_NO_ANALYTICS: "true"
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:7700/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  chrome:
+    image: ghcr.io/browserless/chromium:latest  # chromium has ARM64 support; chrome is amd64-only
+    container_name: karakeep-chrome
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+    networks:
+      - karakeep_internal
+
+    environment:
+      TIMEOUT: "60000"
+      CONCURRENT: "3"
+      HOST: "chrome"  # prevents Browserless returning ws://0.0.0.0 in CDP response
+
+networks:
+  proxy:
+    external: true
+  karakeep_internal:
+    driver: bridge
