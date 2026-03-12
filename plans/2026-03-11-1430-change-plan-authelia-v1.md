@@ -450,6 +450,48 @@ docker exec redis-authelia redis-cli -a "$REDIS_PASS" DBSIZE
 
 ---
 
+---
+
+### Subtask 5.1 — Fix Pi-hole manifest.json CSP violation
+
+**Status**: OPEN — 2026-03-12
+
+**Symptom**: Browser console error when loading Pi-hole admin:
+
+```
+Loading a manifest from 'https://auth.YOUR_DOMAIN/?rd=https%3A%2F%2Fpihole.YOUR_DOMAIN%2Fadmin%2Fadmin%2Fimg%2Ffavicons%2Fmanifest.json&rm=GET'
+violates the following Content Security Policy directive: "default-src 'self' 'unsafe-inline'".
+Note that 'manifest-src' was not explicitly set, so 'default-src' is used as a fallback.
+The action has been blocked.
+```
+
+**Root cause**: Pi-hole's `/admin/img/favicons/manifest.json` is being fetched by the browser, but Authelia intercepts it and returns the Authelia login page (which includes its own CSP: `default-src 'self' 'unsafe-inline'`). The browser's manifest fetch fails because the CSP on the Authelia login response doesn't allow loading a manifest from a cross-origin source.
+
+This is a missing Authelia bypass rule — `/admin/img/favicons/manifest.json` is a static asset that should be served without auth interception (like favicons, CSS, and other static resources).
+
+**Fix**: Add a bypass rule in Authelia's `configuration.yml` for Pi-hole's manifest.json path. In the access control section, add a rule before the catch-all that bypasses auth for the manifest resource:
+
+```yaml
+access_control:
+  rules:
+    # Bypass static assets on pihole that don't need auth
+    - domain: pihole.YOUR_DOMAIN
+      resources:
+        - "^/admin/img/favicons/manifest.json$"
+        - "^/admin/img/favicons/.*$"
+      policy: bypass
+```
+
+**Note on path**: Requests arrive at Traefik as `pihole.YOUR_DOMAIN/` → `pihole-addprefix` middleware prepends `/admin` → container sees `/admin/...`. Authelia receives the *pre-prefix* path (`/img/favicons/manifest.json`) in the forward-auth check. Verify the actual path Authelia sees in logs before writing the bypass rule.
+
+**Verification**:
+```bash
+# Check what path Authelia receives in forward-auth requests for pihole
+docker logs authelia --tail 100 | grep manifest
+```
+
+---
+
 ### Policy: New Services Should Use Authelia as the Only Authentication
 
 > **All future services added to this homelab should rely on Authelia forward-auth as their sole authentication layer.**
