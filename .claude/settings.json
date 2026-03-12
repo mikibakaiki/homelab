@@ -1,0 +1,33 @@
+{
+  "defaultMode": "acceptEdits",
+  "permissions": {
+    "allow": [
+      "Bash(docker *)",
+      "Bash(nslookup *)",
+      "Bash(openssl *)",
+      "Bash(python3 *)",
+      "Bash(sleep *)",
+      "Bash(ls *)",
+      "Bash(ss *)",
+      "Bash(timeout *)",
+      "Bash(curl *)",
+      "Bash(mkdir *)",
+      "Bash(date *)",
+      "Bash(wc *)",
+      "Bash(echo *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(chmod *)",
+      "Bash(htpasswd *)",
+      "Bash(git status)",
+      "Bash(git log *)",
+      "Bash(git diff *)"
+    ],
+    "deny": [
+      "Bash(git push *)",
+      "Bash(rm -rf *)",
+      "Bash(sudo rm *)"
+    ]
+  }
+}

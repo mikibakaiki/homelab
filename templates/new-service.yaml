@@ -1,0 +1,84 @@
+# ===========================================================================
+# New Service Template
+# ===========================================================================
+#
+# Usage:
+#   cp ~/homelab/templates/new-service.yaml \
+#      ~/homelab/docker-compose/<service>/docker-compose.yaml
+#
+#   Replace every occurrence of:
+#     <service>   → short lowercase name (e.g. karakeep)
+#     <PORT>      → container's HTTP port (e.g. 3000)
+#     <IMAGE>     → full image reference (e.g. ghcr.io/foo/bar:1.2.3)
+#
+# Deployment checklist (complete before running docker compose up):
+#   [ ] Replace all <placeholders>
+#   [ ] Add CNAME to Pi-hole: FTLCONF_dns_cnameRecords in pihole compose
+#   [ ] Run: docker compose config                  (YAML + env validation)
+#   [ ] Run: docker network inspect proxy           (network exists)
+#   [ ] Run: docker compose up --no-start           (simulation)
+#   [ ] Review change plan in ~/homelab/plans/
+#   [ ] Obtain explicit approval before deploying
+#
+# Traefik label notes:
+#   - Only ONE middlewares label per router. Comma-separate multiple values.
+#   - traefik.docker.network=proxy is required when the container is on multiple networks.
+#   - Choose the right security headers middleware from config.yaml:
+#       default-security-headers  → strict CSP (most services)
+#       portainer-security-headers → relaxed CSP (UI-heavy apps)
+# ===========================================================================
+
+services:
+  <service>:
+    image: <IMAGE>
+    container_name: <service>
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+    networks:
+      - proxy
+      # - <service>_internal  # uncomment if service has db/cache dependencies
+
+    volumes:
+      - ~/homelab/docker/<service>:/data
+
+    environment:
+      TZ: ${TZ}
+      # Add service-specific env vars here
+
+    # healthcheck:                    # add if the image supports it
+    #   test: ["CMD", "wget", "-qO-", "http://localhost:<PORT>/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.<service>.entrypoints=http"
+      - "traefik.http.routers.<service>.rule=Host(`<service>.YOUR_DOMAIN`)"
+      - "traefik.http.routers.<service>.middlewares=https-redirectscheme@file"
+
+      # HTTPS router
+      - "traefik.http.routers.<service>-secure.entrypoints=https"
+      - "traefik.http.routers.<service>-secure.rule=Host(`<service>.YOUR_DOMAIN`)"
+      - "traefik.http.routers.<service>-secure.tls=true"
+      - "traefik.http.routers.<service>-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.<service>-secure.service=<service>"
+      # To add Authelia (once deployed): append ",authelia@file" to the middleware value
+      - "traefik.http.routers.<service>-secure.middlewares=default-security-headers@file"
+
+      # Backend
+      - "traefik.http.services.<service>.loadbalancer.server.port=<PORT>"
+
+# Uncomment if the service needs an internal network for a database or cache:
+# networks:
+#   <service>_internal:
+#     driver: bridge
+
+networks:
+  proxy:
+    external: true

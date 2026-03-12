@@ -160,4 +160,11 @@ yarn-error.log*
 # CUSTOM ADDITIONS
 # =============================================================================
 
-# Add any project-specific files here
+# Authelia user database — contains real email addresses
+**/users_database.yml
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
+# Sure .env (no .env.example exists for this service)
+docker-compose/sure/.env
