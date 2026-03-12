@@ -1,0 +1,74 @@
+services:
+  authelia:
+    image: ghcr.io/authelia/authelia:4.38
+    container_name: authelia
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+    networks:
+      - proxy
+      - authelia_internal
+
+    volumes:
+      - ../../docker/authelia/config:/config
+      - ../../docker/authelia/data:/data
+
+    env_file:
+      - .env
+
+    environment:
+      TZ: "${TZ}"
+      AUTHELIA_SESSION_REDIS_HOST: "redis-authelia"
+      AUTHELIA_SESSION_REDIS_PORT: "6379"
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.authelia.entrypoints=http"
+      - "traefik.http.routers.authelia.rule=Host(`auth.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.authelia.middlewares=https-redirectscheme@file"
+
+      # HTTPS router — no auth middleware on Authelia itself
+      - "traefik.http.routers.authelia-secure.entrypoints=https"
+      - "traefik.http.routers.authelia-secure.rule=Host(`auth.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.authelia-secure.tls=true"
+      - "traefik.http.routers.authelia-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.authelia-secure.service=authelia"
+      - "traefik.http.routers.authelia-secure.middlewares=portainer-security-headers@file"
+
+      # Backend
+      - "traefik.http.services.authelia.loadbalancer.server.port=9091"
+
+  redis-authelia:
+    image: redis:7-alpine
+    container_name: redis-authelia
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+    networks:
+      - authelia_internal
+
+    volumes:
+      - ../../docker/authelia/redis:/data
+
+    command: >
+      redis-server
+      --requirepass "${REDIS_PASSWORD}"
+      --save 60 1
+      --loglevel warning
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks:
+  proxy:
+    external: true
+  authelia_internal:
+    driver: bridge
