@@ -41,6 +41,7 @@ Two containers:
 | `karakeep.YOUR_DOMAIN` | `one_factor` | OIDC SSO — no second login prompt |
 | `portainer.YOUR_DOMAIN` | `one_factor` | |
 | `pihole.YOUR_DOMAIN` | `one_factor` | |
+| `sure.YOUR_DOMAIN` | `one_factor` | App has its own login after Authelia gate |
 | `traefik.YOUR_DOMAIN` | BasicAuth only | Kept independent — diagnostic tool, no Authelia |
 | `auth.YOUR_DOMAIN` | `bypass` (portal itself) | |
 
@@ -64,6 +65,13 @@ Two classes of requests cannot carry Authelia session cookies:
     - '^/admin/img/.*$'
     - '^/admin/favicon\.ico$'
     - '^/admin/manifest\.json$'
+  policy: 'bypass'
+
+# Sure (Rails): manifest has no .json extension (Rails PWA convention)
+- domain: 'sure.YOUR_DOMAIN'
+  resources:
+    - '^/manifest$'
+    - '^/favicon\.ico$'
   policy: 'bypass'
 
 # Karakeep: NextAuth OIDC callback + Next.js public assets

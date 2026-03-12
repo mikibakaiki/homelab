@@ -122,6 +122,14 @@ access_control:
         - '^/admin/manifest\.json$'
       policy: 'bypass'
 
+    # Sure (Rails): manifest fetched without credentials.
+    # Note: Rails PWA manifest is at /manifest (no .json extension).
+    - domain: 'sure.YOUR_DOMAIN'
+      resources:
+        - '^/manifest$'
+        - '^/favicon\.ico$'
+      policy: 'bypass'
+
     # Karakeep (Next.js): NextAuth OIDC callback + public assets.
     # /api/auth/* — NextAuth callback URL; arrives without session cookie
     #               (it IS the authentication response, not a protected resource)
